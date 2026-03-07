@@ -1,0 +1,79 @@
+# .NET build outputs
+bin/
+obj/
+out/
+dist/
+*.dll
+*.exe
+*.pdb
+
+# Visual Studio cache/options
+.vs/
+.vscode/
+*.user
+*.userosscache
+*.sln.docstates
+.vs/
+.vscode/
+
+# Rider IDE
+.idea/
+*.sln.iml
+*.swp
+*.swo
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+nuget.config
+
+# Local packages
+packages/
+.nuget/
+
+# Test Results
+TestResults/
+*.trx
+*.coverage
+
+# Application data (local runtime)
+*.db
+*.db-wal
+*.db-shm
+smartscript.db
+
+# Config and secrets
+appsettings.Development.json
+config/
+.env
+.env.local
+credentials.json
+token.json
+
+# Plugin runtime
+plugins/
+downloads/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Temp files
+tmpclaude-*
+*.log
+
+# IDE generated files
+*.bak
+*.backup
+*.swp
+*~
+
+# npm (if used for frontend tools)
+node_modules/
+dist/
+build/
+
+# Docker
+.dockerignore
