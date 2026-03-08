@@ -1,0 +1,16 @@
+services:
+  smart-script-hub:
+    build: .
+    image: smart-script-hub:latest
+    container_name: smart-script-hub
+    ports:
+      - "5000:8080"
+    volumes:
+      - ./config:/app/config
+      - D:/Downloads/Auto:/app/downloads
+      - ./plugins:/app/plugins
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+    restart: unless-stopped

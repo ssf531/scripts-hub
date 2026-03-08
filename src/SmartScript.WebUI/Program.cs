@@ -1,0 +1,77 @@
+using Microsoft.EntityFrameworkCore;
+using Quartz;
+using SmartScript.Core.Interfaces;
+using SmartScript.Core.Services;
+using SmartScript.Executor;
+using SmartScript.Executor.Scheduling;
+using SmartScript.Scripts.EmailCleaner;
+using SmartScript.WebUI.Components;
+using SmartScript.WebUI.Data;
+using SmartScript.WebUI.Hubs;
+using SmartScript.WebUI.Services;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Blazor
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents();
+builder.Services.AddSignalR();
+
+// Database
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? "Data Source=smartscript.db";
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlite(connectionString));
+
+// Ollama HTTP client
+var ollamaUrl = builder.Configuration["OLLAMA_BASE_URL"]
+    ?? builder.Configuration["Ollama:BaseUrl"]
+    ?? "http://localhost:11434";
+builder.Services.AddHttpClient<IOllamaClient, OllamaClient>(client =>
+{
+    client.BaseAddress = new Uri(ollamaUrl);
+    client.Timeout = TimeSpan.FromMinutes(5);
+});
+
+// Core services
+builder.Services.AddSingleton<LogBroadcastService>();
+builder.Services.AddScoped<ScriptHubService>();
+builder.Services.AddSingleton<ScriptManager>();
+
+// Built-in scripts
+builder.Services.AddTransient<IScript, EmailCleanerScript>();
+
+// Plugin loader & executor
+var pluginDir = builder.Configuration["PluginDirectory"] ?? "/app/plugins";
+builder.Services.AddSingleton<IScriptLoader>(sp => new PluginLoader(pluginDir));
+builder.Services.AddHostedService<ScriptExecutorService>();
+
+// Quartz.NET
+builder.Services.AddQuartz();
+builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
+builder.Services.AddScoped<QuartzSchedulerService>();
+
+var app = builder.Build();
+
+// Auto-migrate database
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.EnsureCreatedAsync();
+}
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+app.UseAntiforgery();
+
+app.MapStaticAssets();
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode();
+app.MapHub<LogHub>("/hubs/log");
+
+app.Run();

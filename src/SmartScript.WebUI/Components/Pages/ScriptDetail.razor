@@ -1,0 +1,233 @@
+@page "/script/{ScriptName}"
+@using SmartScript.Core.Interfaces
+@using SmartScript.Core.Models
+@using SmartScript.Executor
+@using SmartScript.WebUI.Services
+@using Microsoft.AspNetCore.SignalR.Client
+@inject ScriptManager ScriptManager
+@inject ScriptHubService ScriptHubService
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+
+<PageTitle>@ScriptName - SmartScript Hub</PageTitle>
+
+<nav aria-label="breadcrumb" class="mb-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+        <li class="breadcrumb-item active">@ScriptName</li>
+    </ol>
+</nav>
+
+@if (_script is null)
+{
+    <div class="alert alert-warning">
+        Script '@ScriptName' not found. It may have been unloaded or the name is incorrect.
+        <a href="/">Return to Dashboard</a>.
+    </div>
+}
+else
+{
+    <div class="row">
+        <!-- Settings Panel -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="bi bi-sliders me-2"></i>Settings</h5>
+                </div>
+                <div class="card-body">
+                    @foreach (var setting in _script.Metadata.Settings)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">@setting.DisplayName</label>
+                            @switch (setting.Type)
+                            {
+                                case SettingType.Text:
+                                    <input type="text" class="form-control"
+                                           value="@GetSettingValue(setting.Key)"
+                                           @onchange="(e) => SetSettingValue(setting.Key, e.Value?.ToString() ?? string.Empty)" />
+                                    break;
+
+                                case SettingType.Number:
+                                    <input type="number" class="form-control"
+                                           min="@setting.Min" max="@setting.Max"
+                                           value="@GetSettingValue(setting.Key)"
+                                           @onchange="(e) => SetSettingValue(setting.Key, e.Value?.ToString() ?? string.Empty)" />
+                                    break;
+
+                                case SettingType.Toggle:
+                                    var toggleKey = setting.Key;
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox"
+                                               checked="@IsToggleOn(toggleKey)"
+                                               @onchange="(e) => OnToggleChanged(toggleKey, e)" />
+                                    </div>
+                                    break;
+
+                                case SettingType.Slider:
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="text-muted small">@setting.Min</span>
+                                        <input type="range" class="form-range flex-fill"
+                                               min="@setting.Min" max="@setting.Max"
+                                               value="@GetSettingValue(setting.Key)"
+                                               @onchange="(e) => SetSettingValue(setting.Key, e.Value?.ToString() ?? string.Empty)" />
+                                        <span class="badge bg-primary">@GetSettingValue(setting.Key)</span>
+                                        <span class="text-muted small">@setting.Max</span>
+                                    </div>
+                                    break;
+                            }
+                        </div>
+                    }
+
+                    <button class="btn btn-primary mt-2" @onclick="SaveSettings" disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-check-lg me-1"></i>Save Settings
+                    </button>
+
+                    @if (_saveMessage is not null)
+                    {
+                        <span class="ms-2 text-success small">@_saveMessage</span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Log Console -->
+        <div class="col-md-6 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-terminal me-2"></i>Live Logs</h5>
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="ClearLogs">
+                        <i class="bi bi-trash me-1"></i>Clear
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div class="log-console" style="height: 400px; overflow-y: auto; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 0.85rem; padding: 0.75rem; background: #1e1e1e; color: #d4d4d4;">
+                        @if (!_logs.Any())
+                        {
+                            <div class="text-muted fst-italic">No log entries. Start the script to see output.</div>
+                        }
+                        else
+                        {
+                            @foreach (var log in _logs)
+                            {
+                                <div class="@GetLogClass(log.Level) mb-1">
+                                    <span class="text-muted">[@log.Timestamp.ToString("HH:mm:ss")]</span>
+                                    <span class="@GetLogLevelColor(log.Level)">[@log.Level]</span>
+                                    @log.Message
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string ScriptName { get; set; } = string.Empty;
+
+    private IScript? _script;
+    private readonly Dictionary<string, string> _settingValues = [];
+    private readonly List<LogEntry> _logs = [];
+    private HubConnection? _hubConnection;
+    private bool _saving;
+    private string? _saveMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _script = ScriptManager.GetScript(Uri.UnescapeDataString(ScriptName));
+
+        if (_script != null)
+        {
+            // Initialize settings with defaults
+            foreach (var setting in _script.Metadata.Settings)
+            {
+                _settingValues[setting.Key] = setting.DefaultValue ?? string.Empty;
+            }
+
+            // Connect to SignalR hub
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/hubs/log"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            _hubConnection.On<LogEntry>("ReceiveLog", (entry) =>
+            {
+                if (entry.ScriptName == _script.Metadata.Name)
+                {
+                    _logs.Add(entry);
+                    if (_logs.Count > 200)
+                        _logs.RemoveAt(0);
+                    InvokeAsync(StateHasChanged);
+                }
+            });
+
+            await _hubConnection.StartAsync();
+        }
+    }
+
+    private string GetSettingValue(string key) =>
+        _settingValues.GetValueOrDefault(key, string.Empty);
+
+    private void SetSettingValue(string key, string value) =>
+        _settingValues[key] = value;
+
+    private bool IsToggleOn(string key) =>
+        GetSettingValue(key).Equals("true", StringComparison.OrdinalIgnoreCase);
+
+    private void OnToggleChanged(string key, ChangeEventArgs e)
+    {
+        var isChecked = (bool)(e.Value ?? false);
+        _settingValues[key] = isChecked ? "true" : "false";
+    }
+
+    private async Task SaveSettings()
+    {
+        if (_script is null) return;
+
+        _saving = true;
+        _saveMessage = null;
+        StateHasChanged();
+
+        await ScriptHubService.SaveSettingsAsync(_script.Metadata.Name, _settingValues);
+
+        _saving = false;
+        _saveMessage = "Settings saved.";
+        StateHasChanged();
+    }
+
+    private void ClearLogs()
+    {
+        _logs.Clear();
+        StateHasChanged();
+    }
+
+    private static string GetLogClass(Core.Models.LogLevel level) => level switch
+    {
+        Core.Models.LogLevel.Error => "text-danger",
+        Core.Models.LogLevel.Warning => "text-warning",
+        _ => ""
+    };
+
+    private static string GetLogLevelColor(Core.Models.LogLevel level) => level switch
+    {
+        Core.Models.LogLevel.Error => "text-danger fw-bold",
+        Core.Models.LogLevel.Warning => "text-warning",
+        Core.Models.LogLevel.Info => "text-info",
+        _ => ""
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+}

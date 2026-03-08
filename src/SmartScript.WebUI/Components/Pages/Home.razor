@@ -1,0 +1,117 @@
+@page "/"
+@using SmartScript.Core.Models
+@using SmartScript.Executor
+@using SmartScript.WebUI.Services
+@inject ScriptManager ScriptManager
+@inject ScriptHubService ScriptHubService
+@rendermode InteractiveServer
+
+<PageTitle>Dashboard - SmartScript Hub</PageTitle>
+
+<h3 class="mb-4"><i class="bi bi-grid-1x2-fill me-2"></i>Script Dashboard</h3>
+
+@if (!_scripts.Any())
+{
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>No scripts discovered. Add plugins to the <code>/app/plugins</code> directory or check built-in script registrations.
+    </div>
+}
+else
+{
+    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        @foreach (var script in _scripts)
+        {
+            var state = ScriptManager.GetState(script.Metadata.Name);
+            var successRate = _successRates.GetValueOrDefault(script.Metadata.Name, -1);
+
+            <div class="col">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h5 class="card-title mb-0">
+                                <i class="bi @script.Metadata.Icon me-2"></i>@script.Metadata.Name
+                            </h5>
+                            <span class="badge @GetStateBadgeClass(state)">@state</span>
+                        </div>
+                        <p class="card-text text-muted small">@script.Metadata.Description</p>
+                        <div class="d-flex justify-content-between align-items-center mt-2 mb-3">
+                            <small class="text-muted">v@(script.Metadata.Version)</small>
+                            @if (successRate >= 0)
+                            {
+                                <small class="@(successRate >= 80 ? "text-success" : successRate >= 50 ? "text-warning" : "text-danger")">
+                                    <i class="bi bi-graph-up me-1"></i>@($"{successRate:F0}")% success
+                                </small>
+                            }
+                        </div>
+                    </div>
+                    <div class="card-footer bg-transparent d-flex gap-2">
+                        @if (state == ScriptState.Running)
+                        {
+                            <button class="btn btn-danger btn-sm flex-fill" @onclick="() => StopScript(script)" disabled="@_isProcessing">
+                                <i class="bi bi-stop-fill me-1"></i>Stop
+                            </button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-success btn-sm flex-fill" @onclick="() => StartScript(script)" disabled="@_isProcessing">
+                                <i class="bi bi-play-fill me-1"></i>Start
+                            </button>
+                        }
+                        <a class="btn btn-outline-primary btn-sm" href="@($"script/{Uri.EscapeDataString(script.Metadata.Name)}")">
+                            <i class="bi bi-sliders me-1"></i>Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private IReadOnlyList<SmartScript.Core.Interfaces.IScript> _scripts = [];
+    private Dictionary<string, double> _successRates = [];
+    private bool _isProcessing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _scripts = ScriptManager.GetAllScripts();
+        _successRates = await ScriptHubService.GetSuccessRatesAsync();
+    }
+
+    private async Task StartScript(SmartScript.Core.Interfaces.IScript script)
+    {
+        _isProcessing = true;
+        StateHasChanged();
+
+        var cts = ScriptManager.StartTracking(script.Metadata.Name);
+        try
+        {
+            await ScriptHubService.RunScriptAsync(script, cts.Token);
+            ScriptManager.SetState(script.Metadata.Name, ScriptState.Idle);
+        }
+        catch
+        {
+            ScriptManager.SetState(script.Metadata.Name, ScriptState.Error);
+        }
+
+        _successRates = await ScriptHubService.GetSuccessRatesAsync();
+        _isProcessing = false;
+        StateHasChanged();
+    }
+
+    private async Task StopScript(SmartScript.Core.Interfaces.IScript script)
+    {
+        ScriptManager.StopTracking(script.Metadata.Name);
+        await script.StopAsync();
+        StateHasChanged();
+    }
+
+    private static string GetStateBadgeClass(ScriptState state) => state switch
+    {
+        ScriptState.Idle => "bg-secondary",
+        ScriptState.Running => "bg-success",
+        ScriptState.Stopped => "bg-warning text-dark",
+        ScriptState.Error => "bg-danger",
+        _ => "bg-secondary"
+    };
+}

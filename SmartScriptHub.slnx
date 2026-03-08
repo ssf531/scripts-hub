@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SmartScript.Core/SmartScript.Core.csproj" />
+    <Project Path="src/SmartScript.Executor/SmartScript.Executor.csproj" />
+    <Project Path="src/SmartScript.Scripts.EmailCleaner/SmartScript.Scripts.EmailCleaner.csproj" />
+    <Project Path="src/SmartScript.WebUI/SmartScript.WebUI.csproj" />
+  </Folder>
+</Solution>
