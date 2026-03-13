@@ -32,8 +32,14 @@ SmartScript.WebUI/
 │       │   └── useLogHub.ts       # SignalR hook for real-time logs
 │       ├── pages/
 │       │   ├── Dashboard.tsx      # Script cards, start/stop, live logs
-│       │   ├── ScriptDetail.tsx   # Settings form, diagnostics, logs
-│       │   └── Settings.tsx       # Read-only global config
+│       │   ├── History.tsx        # Recent script run records
+│       │   ├── ScriptDetail.tsx   # Dispatcher → per-script page component
+│       │   ├── Settings.tsx       # Read-only global config
+│       │   └── scripts/           # Per-script page components
+│       │       ├── shared.tsx              # useScriptPage hook, SettingField, SaveBar
+│       │       ├── M3u8DownloaderPage.tsx  # Queue + Diagnostics + Settings layout
+│       │       ├── EmailCleanerPage.tsx    # Settings + Ollama/Email diagnostics
+│       │       └── GenericScriptPage.tsx   # Fallback for any other script
 │       └── components/
 │           ├── LogConsole.tsx      # Reusable log display component
 │           ├── ScriptCard.tsx      # Individual script card
@@ -61,7 +67,7 @@ SmartScript.WebUI/
 | Microsoft.EntityFrameworkCore.Design | 9.x     | EF Core tooling support    |
 | Quartz.Extensions.Hosting            | 3.x     | Quartz hosted service + DI |
 
-**Project references**: SmartScript.Core, SmartScript.Executor, SmartScript.Scripts.EmailCleaner
+**Project references**: SmartScript.Core, SmartScript.Executor, SmartScript.Scripts.EmailCleaner, SmartScript.Scripts.M3u8Downloader
 
 ## Frontend Dependencies
 
@@ -92,10 +98,11 @@ Managed via `ClientApp/package.json`:
 
 ### DiagnosticsController
 
-| Method | Route                          | Description            |
-| ------ | ------------------------------ | ---------------------- |
-| POST   | `/api/diagnostics/test-ollama` | Test Ollama connection |
-| POST   | `/api/diagnostics/test-email`  | Test Gmail credentials |
+| Method | Route                           | Description                          |
+| ------ | ------------------------------- | ------------------------------------ |
+| POST   | `/api/diagnostics/test-ollama`  | Test Ollama connection                |
+| POST   | `/api/diagnostics/test-email`   | Test Gmail credentials               |
+| POST   | `/api/diagnostics/test-m3u8dl`  | Test N_m3u8DL-RE executable (version check) |
 
 ### ConfigController
 
@@ -116,18 +123,41 @@ Route: `/`
 - "Details" link navigates to the script's detail page.
 - Live log panel at the bottom using SignalR.
 
-### ScriptDetail
+### ScriptDetail (Dispatcher)
 
 Route: `/script/:name`
 
-- **Dynamic Settings Form**: Reads `ScriptMetadata.Settings` and auto-renders:
-  - `Text` -> text input
-  - `Number` -> number input with min/max
-  - `Toggle` -> switch checkbox
-  - `Slider` -> range input with current value badge
-- Settings are persisted to SQLite on save. On page load, the API returns both `defaultValue` and `savedValue` for each setting; the form shows saved values when available, falling back to defaults.
-- **Diagnostics Panel**: Test Ollama connection and Gmail credentials. The email test checks for `credentials.json` and an OAuth token file. When the token is missing, step-by-step instructions are shown for completing the OAuth authorization flow.
-- **Live Log Console**: Connects to SignalR `/hubs/log` hub filtered by script name. Displays timestamped, color-coded log entries (Info=cyan, Warning=yellow, Error=red). Dark terminal-style background. Shows a warning banner if the SignalR connection fails (e.g. due to an ad blocker).
+`ScriptDetail.tsx` is a thin dispatcher that maps the script name to a dedicated page component. To add a custom UI for a new script, create `pages/scripts/YourScriptPage.tsx` and register one line in the `PAGES` map.
+
+#### M3u8DownloaderPage
+
+- **Download Queue card**: Large textarea for `URL|Filename` entries (one per line). Plain URLs are also accepted — filename is auto-detected.
+- **Diagnostics card**: "Test N_m3u8DL-RE" button runs `--version` to confirm the executable is installed and accessible.
+- **Settings card**: Compact 3-column grid — Save Directory, Executable Path, Thread Count (slider), Output Format, Extra Arguments.
+- **Save Settings**: Single save button below the Settings card saves all settings (queue + config) at once.
+
+#### EmailCleanerPage
+
+- **Settings card** + **Diagnostics card** side by side.
+- Diagnostics: Test Ollama connection (lists available models) and Test Email Credentials (checks `credentials.json` + OAuth token with setup instructions).
+
+#### GenericScriptPage
+
+Fallback for any script without a dedicated page. Renders all settings in a single card.
+
+#### Shared setting types (`SettingType` enum)
+
+| Type       | Rendered as                        |
+| ---------- | ---------------------------------- |
+| `Text`     | `<input type="text">`              |
+| `Number`   | `<input type="number">` with min/max |
+| `Toggle`   | Bootstrap form switch              |
+| `Slider`   | `<input type="range">` with value badge |
+| `Textarea` | `<textarea>` (monospace, 10 rows)  |
+
+Settings are persisted to SQLite on save. On page load, the API returns both `defaultValue` (from script metadata / `appsettings.json`) and `savedValue` (from DB); the form shows the saved value when available, falling back to the default.
+
+- **Live Log Console**: Connects to SignalR `/hubs/log` hub filtered by script name. Timestamped, color-coded entries (Info=cyan, Warning=yellow, Error=red). Shows a warning banner if the SignalR connection fails.
 
 ### Settings
 
@@ -162,8 +192,9 @@ Singleton service that accepts `LogEntry` objects and broadcasts them to all con
 
 Provides diagnostic methods:
 
-- `TestOllamaAsync` -- Verifies Ollama connectivity and lists available models.
-- `TestEmailAsync` -- Checks for `credentials.json` and OAuth token files at a given path.
+- `TestOllamaAsync` — Verifies Ollama connectivity and lists available models.
+- `TestEmailCredentialsAsync` — Checks for `credentials.json` and OAuth token files at a given path.
+- `TestM3u8DLAsync` — Resolves the N_m3u8DL-RE executable from PATH or an absolute path, runs `--version`, and returns the version string.
 
 ## Database
 
@@ -188,11 +219,20 @@ Key settings in `appsettings.json`:
     "DefaultModel": "llama3.2"
   },
   "CredentialPath": "/app/config",
-  "PluginDirectory": "/app/plugins"
+  "PluginDirectory": "/app/plugins",
+  "M3u8Downloader": {
+    "ExecutablePath": "N_m3u8DL-RE",
+    "SaveDir": "",
+    "ThreadCount": "6",
+    "OutputFormat": "mp4",
+    "ExtraArgs": ""
+  }
 }
 ```
 
-The environment variable `OLLAMA_BASE_URL` overrides `Ollama:BaseUrl` when set. `Ollama:DefaultModel` sets the default AI model for scripts. `CredentialPath` sets the directory where Gmail OAuth credentials and tokens are stored.
+- `OLLAMA_BASE_URL` env var overrides `Ollama:BaseUrl`.
+- `CredentialPath` — directory for Gmail OAuth credentials and tokens.
+- `M3u8Downloader:*` — default values for the M3U8 Downloader script settings. These are used when a user hasn't saved custom values yet.
 
 ## Development
 
@@ -218,11 +258,22 @@ npm install
 npm run dev
 ```
 
-The Vite dev server runs on `http://localhost:5173` and proxies `/api` and `/hubs` requests to the ASP.NET backend on port 5220.
+The Vite dev server runs on `http://localhost:3000` and proxies `/api` and `/hubs` requests to the ASP.NET backend on port 5220.
+
+### Rebuilding the frontend
+
+After making frontend changes, run `npm run build` from `ClientApp/` to update the backend's static files:
+
+```bash
+cd src/SmartScript.WebUI/ClientApp
+npm run build
+```
+
+Vite outputs directly to `../wwwroot/` (configured via `outDir` in `vite.config.ts`), so port 5220 immediately serves the updated app after a rebuild and server restart.
 
 ### Publishing
 
-The csproj includes a `PublishSpa` target that automatically runs `npm ci && npm run build` and copies `ClientApp/dist/` to `wwwroot/` during `dotnet publish`.
+The csproj `PublishSpa` target runs `npm ci && npm run build` automatically during `dotnet publish`, outputting to `wwwroot/` which is included in the publish output.
 
 ## Troubleshooting
 
@@ -232,3 +283,5 @@ The csproj includes a `PublishSpa` target that automatically runs `npm ci && npm
 | Settings reset to defaults after page reload | Verify the API returns `savedValue` fields (GET `/api/scripts/{name}`) — this was fixed so saved values persist across reloads |
 | Email test says "no OAuth token" | Run the Email Cleaner script once to trigger the Google OAuth consent flow in your browser |
 | Email test says "credentials.json not found" | Download `credentials.json` from Google Cloud Console > APIs & Services > Credentials (OAuth 2.0 Client ID, Desktop type) and place it in the credential path |
+| M3U8 diagnostic says "Executable not found" | Install N_m3u8DL-RE and add it to your PATH, or enter the full absolute path in the script's Executable Path setting |
+| Port 5220 shows outdated UI after frontend changes | Run `npm run build` in `ClientApp/` — the output goes to `wwwroot/` and is picked up on next backend start |

@@ -20,25 +20,27 @@ The project is divided into several decoupled components to ensure maximum exten
 
 - **SmartScript.Executor**: A background service that manages script lifecycles and triggers tasks based on schedules or specific events.
 
-- **SmartScript.Scripts.EmailCleaner**: The flagship plugin implementing Gmail integration and AI-driven mail sorting.
+- **SmartScript.Scripts.EmailCleaner**: Built-in plugin implementing Gmail integration and AI-driven mail sorting.
+
+- **SmartScript.Scripts.M3u8Downloader**: Built-in plugin for queued HLS/M3U8 video downloads using [N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE).
 
   ***
 
-## 3. Core Functionality: AI Email Sorter
+## 3. Built-in Scripts
 
-The first built-in automation script follows this intelligent workflow:
+### AI Email Sorter
 
-1.  **OAuth2 Authentication**: Users upload their `credentials.json` via the web UI and complete the Gmail authorization flow in their browser.
-
+1.  **OAuth2 Authentication**: Users upload their `credentials.json` and complete the Gmail authorization flow in their browser.
 2.  **Smart Fetching**: The script periodically retrieves unread emails from the inbox.
-
 3.  **Local AI Summarization**: Email content is sent to a local **Ollama** model for summary generation and importance scoring (0–10).
+4.  **Automated Decision-Making**: High-value emails remain unread; low-value/spam is automatically trashed.
 
-4.  **Automated Decision-Making**:
+### M3U8 Video Downloader
 
-- **High-Value Emails**: Remain unread; summaries are highlighted in the dashboard.
-
-- **Low-Value/Spam**: Automatically moved to the trash or deleted to keep the inbox clean.
+1.  **Download Queue**: Enter one or more `URL|Filename` pairs (or plain URLs) in the queue textarea.
+2.  **Silent Execution**: Downloads run without a terminal window — all output is captured to the live log console.
+3.  **Sequential Processing**: Items in the queue are processed one-by-one with per-item progress logging.
+4.  **Configurable**: Thread count, output format (mp4/mkv/ts), save directory, and extra CLI arguments are all adjustable. Default values are read from `appsettings.json` under the `M3u8Downloader` section.
 
   ***
 
@@ -82,13 +84,15 @@ services:
 
 - **Script Dashboard**: Card-based React view of all scripts with "Start/Stop" controls and success rate metrics.
 
-- **Dynamic Settings**: An adaptive form engine that automatically renders UI inputs (text, sliders, toggles) based on the script's metadata, served via REST API.
+- **Dynamic Settings**: An adaptive form engine that auto-renders inputs (`text`, `number`, `toggle`, `slider`, `textarea`) based on each script's metadata — no frontend changes needed to add new settings.
 
-- **Real-time Logs**: Integrated **SignalR** console (via `@microsoft/signalr` npm package) for viewing AI processing steps and script logs live.
+- **Per-Script UI Pages**: Each script has its own dedicated page component. The M3U8 Downloader shows a Download Queue card + Diagnostics card + Settings card; the Email Cleaner shows Settings + Ollama/Gmail diagnostics side by side. Generic scripts fall back to a standard settings layout.
 
-- **Client-Side Routing**: React Router handles navigation between Dashboard (`/`), Script Detail (`/script/:name`), and Settings (`/settings`).
+- **Real-time Logs**: Integrated **SignalR** console for viewing live script output. Dark terminal-style display with color-coded log levels.
 
-- **Diagnostics**: Built-in connection testing for Ollama and Gmail credentials directly from the script detail page.
+- **Client-Side Routing**: React Router handles navigation between Dashboard (`/`), Script Detail (`/script/:name`), History (`/history`), and Settings (`/settings`).
+
+- **Diagnostics**: Per-script connection testing — M3U8 Downloader verifies N_m3u8DL-RE is installed; Email Cleaner tests Ollama connectivity and Gmail OAuth credentials.
 
   ***
 
@@ -111,10 +115,12 @@ services:
 
 ## 7. Development Roadmap
 
-- **Phase 1**: Core interface definitions, Docker multi-stage build setup, and Gmail OAuth integration.
+- **Phase 1** ✅: Core interface definitions, Docker multi-stage build setup, and Gmail OAuth integration.
 
-- **Phase 2**: React Dashboard with REST API backend and the dynamic form engine.
+- **Phase 2** ✅: React Dashboard with REST API backend and the dynamic form engine.
 
-- **Phase 3**: Quartz.NET task scheduling and hot-loading support for `.dll` plugins.
+- **Phase 3** ✅: Quartz.NET task scheduling and hot-loading support for `.dll` plugins.
+
+- **Phase 4** ✅: M3U8 Video Downloader plugin with download queue, per-script UI pages, and `Textarea` setting type.
 
   ***

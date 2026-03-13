@@ -6,6 +6,7 @@ using SmartScript.Core.Services;
 using SmartScript.Executor;
 using SmartScript.Executor.Scheduling;
 using SmartScript.Scripts.EmailCleaner;
+using SmartScript.Scripts.M3u8Downloader;
 using SmartScript.WebUI.Data;
 using SmartScript.WebUI.Hubs;
 using SmartScript.WebUI.Services;
@@ -50,6 +51,7 @@ builder.Services.AddSingleton<ScriptManager>();
 
 // Built-in scripts
 builder.Services.AddTransient<IScript, EmailCleanerScript>();
+builder.Services.AddTransient<IScript, M3u8DownloaderScript>();
 
 // Plugin loader & executor
 var pluginDir = builder.Configuration["PluginDirectory"] ?? "/app/plugins";

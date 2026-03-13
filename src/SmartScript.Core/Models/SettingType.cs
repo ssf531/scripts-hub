@@ -5,5 +5,6 @@ public enum SettingType
     Text,
     Number,
     Toggle,
-    Slider
+    Slider,
+    Textarea
 }

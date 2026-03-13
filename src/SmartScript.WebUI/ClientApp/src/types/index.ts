@@ -12,7 +12,7 @@ export interface ScriptInfo {
 export interface SettingDefinition {
   key: string;
   displayName: string;
-  type: "text" | "number" | "toggle" | "slider";
+  type: "text" | "number" | "toggle" | "slider" | "textarea";
   defaultValue: string | null;
   savedValue: string | null;
   min: number | null;
@@ -52,6 +52,12 @@ export interface EmailTestResult {
   message: string;
   credentialFileFound: boolean;
   tokenFileFound: boolean;
+}
+
+export interface M3u8DLTestResult {
+  success: boolean;
+  message: string;
+  resolvedPath: string | null;
 }
 
 export interface GlobalConfig {

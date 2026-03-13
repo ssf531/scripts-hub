@@ -11,6 +11,7 @@
     <ProjectReference Include="..\SmartScript.Core\SmartScript.Core.csproj" />
     <ProjectReference Include="..\SmartScript.Executor\SmartScript.Executor.csproj" />
     <ProjectReference Include="..\SmartScript.Scripts.EmailCleaner\SmartScript.Scripts.EmailCleaner.csproj" />
+    <ProjectReference Include="..\SmartScript.Scripts.M3u8Downloader\SmartScript.Scripts.M3u8Downloader.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -29,12 +30,12 @@
     <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**" />
   </ItemGroup>
 
-  <!-- Copy React build output to wwwroot on publish -->
+  <!-- Build React app into wwwroot on publish (outDir is ../wwwroot in vite.config.ts) -->
   <Target Name="PublishSpa" AfterTargets="ComputeFilesToPublish">
     <Exec WorkingDirectory="$(SpaRoot)" Command="npm ci" />
     <Exec WorkingDirectory="$(SpaRoot)" Command="npm run build" />
     <ItemGroup>
-      <DistFiles Include="$(SpaRoot)dist\**" />
+      <DistFiles Include="wwwroot\**" />
       <ResolvedFileToPublish Include="@(DistFiles->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
         <RelativePath>wwwroot\%(RecursiveDir)%(FileName)%(Extension)</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
