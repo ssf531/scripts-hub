@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ASP.NET Core Backend",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "src/SmartScript.WebUI"],
+      "port": 5220
+    },
+    {
+      "name": "Vite Frontend (dev)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "src/SmartScript.WebUI/ClientApp", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}
