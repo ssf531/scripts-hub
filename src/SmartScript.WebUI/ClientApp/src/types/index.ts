@@ -25,6 +25,15 @@ export interface ScriptRunResult {
   state: string;
 }
 
+export interface ScriptRunRecord {
+  id: number;
+  scriptName: string;
+  startedAt: string;
+  completedAt: string | null;
+  success: boolean;
+  resultMessage: string;
+}
+
 export interface LogEntry {
   timestamp: string;
   level: string;
