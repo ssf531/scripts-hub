@@ -23,6 +23,14 @@ export function Navbar() {
           <i className="bi bi-grid-1x2-fill me-2"></i>Dashboard
         </NavLink>
         <NavLink
+          to="/history"
+          className={({ isActive }) =>
+            `nav-link text-white ${isActive ? "bg-primary bg-opacity-25 rounded" : ""}`
+          }
+        >
+          <i className="bi bi-clock-history me-2"></i>History
+        </NavLink>
+        <NavLink
           to="/settings"
           className={({ isActive }) =>
             `nav-link text-white ${isActive ? "bg-primary bg-opacity-25 rounded" : ""}`
