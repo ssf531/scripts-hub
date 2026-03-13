@@ -31,6 +31,22 @@ export function Navbar() {
           <i className="bi bi-clock-history me-2"></i>History
         </NavLink>
         <NavLink
+          to="/pdf-parser"
+          className={({ isActive }) =>
+            `nav-link text-white ${isActive ? "bg-primary bg-opacity-25 rounded" : ""}`
+          }
+        >
+          <i className="bi bi-file-earmark-pdf-fill me-2"></i>PDF Parser
+        </NavLink>
+        <NavLink
+          to="/spending-analysis"
+          className={({ isActive }) =>
+            `nav-link text-white ${isActive ? "bg-primary bg-opacity-25 rounded" : ""}`
+          }
+        >
+          <i className="bi bi-graph-up me-2"></i>Spending Analysis
+        </NavLink>
+        <NavLink
           to="/settings"
           className={({ isActive }) =>
             `nav-link text-white ${isActive ? "bg-primary bg-opacity-25 rounded" : ""}`

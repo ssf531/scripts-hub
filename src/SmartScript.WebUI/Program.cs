@@ -41,6 +41,10 @@ builder.Services.AddHttpClient<IOllamaClient, OllamaClient>(client =>
     client.Timeout = TimeSpan.FromMinutes(5);
 });
 
+// PDF parser & spending analysis
+builder.Services.AddScoped<PdfParserService>();
+builder.Services.AddScoped<SpendingAnalysisService>();
+
 // Core services
 builder.Services.AddSingleton<LogBroadcastService>();
 builder.Services.AddSingleton<IScriptLogger, ScriptLogger>();
