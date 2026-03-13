@@ -5,4 +5,7 @@
     <Project Path="src/SmartScript.Scripts.EmailCleaner/SmartScript.Scripts.EmailCleaner.csproj" />
     <Project Path="src/SmartScript.WebUI/SmartScript.WebUI.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SmartScript.Tests/SmartScript.Tests.csproj" />
+  </Folder>
 </Solution>

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Quartz;
 using SmartScript.Core.Interfaces;
@@ -5,17 +6,24 @@ using SmartScript.Core.Services;
 using SmartScript.Executor;
 using SmartScript.Executor.Scheduling;
 using SmartScript.Scripts.EmailCleaner;
-using SmartScript.WebUI.Components;
 using SmartScript.WebUI.Data;
 using SmartScript.WebUI.Hubs;
 using SmartScript.WebUI.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Blazor
-builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
-builder.Services.AddSignalR();
+// API Controllers
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
+builder.Services.AddSignalR()
+    .AddJsonProtocol(options =>
+    {
+        options.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 
 // Database
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
@@ -35,7 +43,9 @@ builder.Services.AddHttpClient<IOllamaClient, OllamaClient>(client =>
 
 // Core services
 builder.Services.AddSingleton<LogBroadcastService>();
+builder.Services.AddSingleton<IScriptLogger, ScriptLogger>();
 builder.Services.AddScoped<ScriptHubService>();
+builder.Services.AddScoped<TestConnectionService>();
 builder.Services.AddSingleton<ScriptManager>();
 
 // Built-in scripts
@@ -64,14 +74,17 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
+    app.UseHttpsRedirection();
 }
 
-app.UseHttpsRedirection();
-app.UseAntiforgery();
+// Serve React static files from wwwroot (ClientApp/dist copied here)
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
-app.MapStaticAssets();
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode();
+app.MapControllers();
 app.MapHub<LogHub>("/hubs/log");
+
+// SPA fallback: any unmatched route serves index.html for client-side routing
+app.MapFallbackToFile("index.html");
 
 app.Run();

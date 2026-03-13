@@ -7,7 +7,7 @@ SmartScriptHub.slnx
 ├── src/
 │   ├── SmartScript.Core/              # Shared contracts and models (no dependencies)
 │   ├── SmartScript.Executor/          # Background services, scheduling, plugin loading
-│   ├── SmartScript.WebUI/             # Blazor Server app (host project)
+│   ├── SmartScript.WebUI/             # ASP.NET Core API + React SPA (host project)
 │   └── SmartScript.Scripts.EmailCleaner/  # Built-in Gmail AI sorter plugin
 ├── Dockerfile                         # Multi-stage build (SDK -> runtime)
 ├── docker-compose.yml                 # Container orchestration with bind mounts
@@ -36,7 +36,8 @@ SmartScript.Core/
 │   ├── LogEntry.cs             # Timestamp, Level, Message, ScriptName
 │   └── LogLevel.cs             # Enum: Info, Warning, Error
 └── Services/
-    └── IOllamaClient.cs        # GenerateAsync(prompt, model, ct)
+    ├── IOllamaClient.cs        # GenerateAsync(prompt, model, ct)
+    └── IScriptLogger.cs        # LogAsync(scriptName, message, level)
 ```
 
 **Referenced by**: Executor, WebUI, EmailCleaner
@@ -68,24 +69,41 @@ SmartScript.Executor/
 
 ### SmartScript.WebUI
 
-Blazor Server host application. Entry point for the entire system.
+ASP.NET Core Web API + React SPA host application. Entry point for the entire system.
 
 ```
 SmartScript.WebUI/
 ├── Program.cs                  # DI registration, EF Core, SignalR, Quartz, hosted services
 ├── appsettings.json            # Connection string, Ollama URL, plugin directory
-├── Components/
-│   ├── App.razor               # Root HTML: Bootstrap 5, Bootstrap Icons CDN
-│   ├── Routes.razor            # Router component
-│   ├── _Imports.razor          # Global Razor usings
-│   ├── Layout/
-│   │   ├── MainLayout.razor    # Sidebar + content layout
-│   │   └── NavMenu.razor       # Dashboard and Settings nav links
-│   └── Pages/
-│       ├── Home.razor          # Dashboard: card grid, Start/Stop, state badges, success rates
-│       ├── ScriptDetail.razor  # Dynamic form engine + SignalR live log console
-│       ├── Settings.razor      # Global config display (Ollama URL, plugin dir, OAuth info)
-│       └── Error.razor         # Error boundary page
+├── Controllers/
+│   ├── ScriptsController.cs    # REST API: list/get/run/stop scripts, save settings
+│   ├── DiagnosticsController.cs # REST API: test Ollama & email connections
+│   └── ConfigController.cs     # REST API: global config (Ollama URL, plugin dir)
+├── ClientApp/                  # React + TypeScript + Vite SPA
+│   ├── package.json            # Frontend dependencies (react, signalr, bootstrap)
+│   ├── vite.config.ts          # Vite config with API/SignalR proxy
+│   ├── tsconfig.json           # TypeScript config
+│   ├── index.html              # SPA entry point
+│   └── src/
+│       ├── main.tsx            # React entry, BrowserRouter setup
+│       ├── App.tsx             # Layout: sidebar Navbar + Outlet
+│       ├── vite-env.d.ts       # CSS module type declarations
+│       ├── types/index.ts      # TypeScript interfaces (ScriptInfo, LogEntry, etc.)
+│       ├── api/
+│       │   ├── client.ts       # Fetch wrapper (base URL, error handling)
+│       │   ├── scripts.ts      # Script API functions
+│       │   ├── diagnostics.ts  # Diagnostics API functions
+│       │   └── config.ts       # Config API functions
+│       ├── hooks/
+│       │   └── useLogHub.ts    # SignalR hook: connect, filter by script, auto-reconnect
+│       ├── pages/
+│       │   ├── Dashboard.tsx   # Card grid, Start/Stop, state badges, success rates, logs
+│       │   ├── ScriptDetail.tsx # Dynamic form engine + diagnostics + filtered log console
+│       │   └── Settings.tsx    # Global config display (Ollama URL, plugin dir, OAuth info)
+│       └── components/
+│           ├── LogConsole.tsx   # Reusable dark terminal-style log viewer
+│           ├── ScriptCard.tsx   # Individual script card with state badge + progress bar
+│           └── Navbar.tsx       # Dark sidebar with active link highlighting
 ├── Data/
 │   ├── AppDbContext.cs         # EF Core DbContext (SQLite)
 │   └── Entities/
@@ -95,11 +113,14 @@ SmartScript.WebUI/
 │   └── LogHub.cs               # SignalR hub at /hubs/log (JoinScriptGroup, LeaveScriptGroup)
 └── Services/
     ├── OllamaClient.cs         # IOllamaClient impl: POST /api/generate with error handling
-    ├── ScriptHubService.cs     # Bridges UI to scripts: RunScriptAsync, SaveSettingsAsync, GetSuccessRatesAsync
-    └── LogBroadcastService.cs  # Singleton: accepts LogEntry, broadcasts via SignalR, caches recent 500
+    ├── ScriptHubService.cs     # Bridges API to scripts: RunScriptAsync, SaveSettingsAsync, GetSuccessRatesAsync
+    ├── LogBroadcastService.cs  # Singleton: accepts LogEntry, broadcasts via SignalR + OnLogReceived event
+    ├── ScriptLogger.cs         # IScriptLogger impl: creates LogEntry, delegates to LogBroadcastService
+    └── TestConnectionService.cs # Diagnostics: test Ollama connectivity, check Gmail credential files
 ```
 
-**NuGet packages**: Microsoft.EntityFrameworkCore.Sqlite 9.x, Microsoft.AspNetCore.SignalR.Client, Quartz.Extensions.Hosting
+**NuGet packages**: Microsoft.EntityFrameworkCore.Sqlite 9.x, Quartz.Extensions.Hosting
+**Frontend packages** (via npm): react, react-router-dom, @microsoft/signalr, bootstrap, bootstrap-icons, vite, typescript
 **References**: SmartScript.Core, SmartScript.Executor, SmartScript.Scripts.EmailCleaner
 
 ---
@@ -111,7 +132,7 @@ Built-in plugin implementing the AI Email Sorter workflow.
 ```
 SmartScript.Scripts.EmailCleaner/
 ├── EmailCleanerScript.cs       # IScript impl: fetch -> Ollama summarize -> score -> trash/keep
-│                               #   Settings: ollamaModel, importanceThreshold, maxEmails, autoTrash
+│                               #   Settings: ollamaModel, importanceThreshold, maxEmails, autoTrash, credentialPath
 │                               #   Default cron: every 15 minutes
 ├── GmailAuthService.cs         # OAuth2 flow: loads credentials.json, stores token in /app/config
 │                               #   Auto-refreshes expired tokens
@@ -143,13 +164,16 @@ SmartScript.Core  (no dependencies)
 
 ## Key Integration Points
 
-| Feature             | Component                        | Mechanism                                          |
-| ------------------- | -------------------------------- | -------------------------------------------------- |
-| Script discovery    | ScriptExecutorService            | DI `IEnumerable<IScript>` + PluginLoader           |
-| Script execution    | ScriptHubService                 | Calls `IScript.ExecuteAsync` via ScriptManager     |
-| Real-time logs      | LogBroadcastService + LogHub     | SignalR push to connected Blazor clients           |
-| Dynamic settings UI | ScriptDetail.razor               | Renders inputs from `ScriptMetadata.Settings`      |
-| Persistence         | AppDbContext                     | SQLite via EF Core (auto-created on startup)       |
-| Scheduling          | QuartzSchedulerService           | Cron-based via `ScriptMetadata.CronExpression`     |
-| Plugin hot-loading  | PluginLoader + FileSystemWatcher | AssemblyLoadContext per DLL, auto-reload on change |
-| AI processing       | OllamaClient                     | HTTP POST to Ollama REST API (`/api/generate`)     |
+| Feature             | Component                        | Mechanism                                              |
+| ------------------- | -------------------------------- | ------------------------------------------------------ |
+| Script discovery    | ScriptExecutorService            | DI `IEnumerable<IScript>` + PluginLoader               |
+| Script execution    | ScriptHubService                 | Calls `IScript.ExecuteAsync` via ScriptManager         |
+| Real-time logs      | LogBroadcastService + LogHub     | SignalR push to connected React clients                |
+| Script logging      | ScriptLogger                     | IScriptLogger impl delegates to LogBroadcastService    |
+| REST API            | Controllers/\*                   | ASP.NET Core controllers wrapping existing services    |
+| Dynamic settings UI | ScriptDetail.tsx                 | React form renders inputs from ScriptMetadata.Settings |
+| Diagnostics         | TestConnectionService            | Test Ollama connectivity, check Gmail credentials      |
+| Persistence         | AppDbContext                     | SQLite via EF Core (auto-created on startup)           |
+| Scheduling          | QuartzSchedulerService           | Cron-based via `ScriptMetadata.CronExpression`         |
+| Plugin hot-loading  | PluginLoader + FileSystemWatcher | AssemblyLoadContext per DLL, auto-reload on change     |
+| AI processing       | OllamaClient                     | HTTP POST to Ollama REST API (`/api/generate`)         |

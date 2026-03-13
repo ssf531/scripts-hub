@@ -34,12 +34,13 @@ SmartScript.Scripts.EmailCleaner/
 
 These settings are defined in `EmailCleanerScript.Metadata.Settings` and rendered as a dynamic form in the WebUI:
 
-| Key                   | Display Name                | Type   | Default    | Range |
-| --------------------- | --------------------------- | ------ | ---------- | ----- |
-| `ollamaModel`         | Ollama Model                | Text   | `llama3.2` | --    |
-| `importanceThreshold` | Importance Threshold (0-10) | Slider | `5`        | 0-10  |
-| `maxEmails`           | Max Emails Per Run          | Number | `20`       | 1-100 |
-| `autoTrash`           | Auto-Trash Low-Value Emails | Toggle | `true`     | --    |
+| Key                   | Display Name                | Type   | Default       | Range |
+| --------------------- | --------------------------- | ------ | ------------- | ----- |
+| `ollamaModel`         | Ollama Model                | Text   | `llama3.2`    | --    |
+| `importanceThreshold` | Importance Threshold (0-10) | Slider | `5`           | 0-10  |
+| `maxEmails`           | Max Emails Per Run          | Number | `20`          | 1-100 |
+| `autoTrash`           | Auto-Trash Low-Value Emails | Toggle | `true`        | --    |
+| `credentialPath`      | Gmail Credential Path       | Text   | `/app/config` | --    |
 
 ## Scheduling
 
@@ -51,7 +52,7 @@ This is defined in `ScriptMetadata.CronExpression` and automatically registered 
 
 1. Create a Google Cloud project with Gmail API enabled.
 2. Create an OAuth 2.0 Client ID (Desktop application type) in the Credentials section.
-3. Download `credentials.json` and place it in `/app/config/` (Docker) or the working directory (local dev).
+3. Download `credentials.json` and place it in `/app/config/` (Docker) or the working directory (local dev). The path is configurable via the `credentialPath` setting.
 4. On first execution, a browser window opens for Gmail authorization. The token is saved to the same config directory and auto-refreshed on subsequent runs.
 
 ### File Locations

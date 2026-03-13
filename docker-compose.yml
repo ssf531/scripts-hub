@@ -4,13 +4,19 @@ services:
     image: smart-script-hub:latest
     container_name: smart-script-hub
     ports:
-      - "5000:8080"
+      - "5000:8080" # Access the app at http://localhost:5000
     volumes:
-      - ./config:/app/config
-      - D:/Downloads/Auto:/app/downloads
-      - ./plugins:/app/plugins
+      - ./config:/app/config # OAuth tokens, SQLite DB, script settings
+      # Change the path below to your desired downloads folder:
+      #   Windows:  D:/Downloads/Auto:/app/downloads
+      #   Linux:    /home/user/downloads:/app/downloads
+      #   macOS:    /Users/user/Downloads:/app/downloads
+      - ./downloads:/app/downloads
+      - ./plugins:/app/plugins # Drop-in .dll plugins auto-discovered at startup
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "host.docker.internal:host-gateway" # Required on Linux for host access
     environment:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      # - Ollama__DefaultModel=llama3.2
+      # - CredentialPath=/app/config
     restart: unless-stopped

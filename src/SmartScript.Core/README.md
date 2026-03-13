@@ -18,7 +18,8 @@ SmartScript.Core/
 │   ├── LogEntry.cs           # Timestamped log message
 │   └── LogLevel.cs           # Enum: Info, Warning, Error
 └── Services/
-    └── IOllamaClient.cs      # Ollama AI generation contract
+    ├── IOllamaClient.cs      # Ollama AI generation contract
+    └── IScriptLogger.cs      # Script logging contract
 ```
 
 ## Key Interfaces
@@ -61,6 +62,17 @@ Abstraction for local AI text generation via Ollama.
 public interface IOllamaClient
 {
     Task<string> GenerateAsync(string prompt, string model, CancellationToken ct);
+}
+```
+
+### IScriptLogger
+
+Abstraction for structured log output from scripts, enabling real-time log broadcasting.
+
+```csharp
+public interface IScriptLogger
+{
+    Task LogAsync(string scriptName, string message, LogLevel level = LogLevel.Info);
 }
 ```
 

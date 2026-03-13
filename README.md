@@ -1,6 +1,6 @@
 # SmartScript Hub: Modular AI-Powered Automation Center
 
-**SmartScript Hub** is a lightweight, self-hosted automation management platform built with **.NET 9** and **Blazor Server**. It is designed to automate repetitive digital tasks using local AI (Ollama) and various API integrations through a modular, plugin-based architecture.
+**SmartScript Hub** is a lightweight, self-hosted automation management platform built with **.NET 9** (ASP.NET Core API) and a **React + TypeScript** frontend (Vite). It is designed to automate repetitive digital tasks using local AI (Ollama) and various API integrations through a modular, plugin-based architecture.
 
 ---
 
@@ -16,7 +16,7 @@ The project is divided into several decoupled components to ensure maximum exten
 
 - **SmartScript.Core**: The foundation library defining script contracts (`IScript`), configuration metadata (`ScriptMetadata`), and file handling standards.
 
-- **SmartScript.WebUI (Blazor)**: A browser-based interface for managing script states, real-time monitoring, and dynamic configuration.
+- **SmartScript.WebUI (React + ASP.NET Core API)**: A browser-based interface for managing script states, real-time monitoring, and dynamic configuration. The backend exposes REST API endpoints and a SignalR hub; the frontend is a React SPA with client-side routing.
 
 - **SmartScript.Executor**: A background service that manages script lifecycles and triggers tasks based on schedules or specific events.
 
@@ -80,11 +80,15 @@ services:
 
 ## 5. UI Design
 
-- **Script Dashboard**: Card-based view of all scripts with "Start/Stop" controls and success rate metrics.
+- **Script Dashboard**: Card-based React view of all scripts with "Start/Stop" controls and success rate metrics.
 
-- **Dynamic Settings**: An adaptive form engine that automatically renders UI inputs (text, sliders, toggles) based on the script's metadata.
+- **Dynamic Settings**: An adaptive form engine that automatically renders UI inputs (text, sliders, toggles) based on the script's metadata, served via REST API.
 
-- **Real-time Logs**: Integrated **SignalR** console for viewing AI processing steps and script logs live.
+- **Real-time Logs**: Integrated **SignalR** console (via `@microsoft/signalr` npm package) for viewing AI processing steps and script logs live.
+
+- **Client-Side Routing**: React Router handles navigation between Dashboard (`/`), Script Detail (`/script/:name`), and Settings (`/settings`).
+
+- **Diagnostics**: Built-in connection testing for Ollama and Gmail credentials directly from the script detail page.
 
   ***
 
@@ -109,7 +113,7 @@ services:
 
 - **Phase 1**: Core interface definitions, Docker multi-stage build setup, and Gmail OAuth integration.
 
-- **Phase 2**: Blazor Dashboard development and the dynamic form engine.
+- **Phase 2**: React Dashboard with REST API backend and the dynamic form engine.
 
 - **Phase 3**: Quartz.NET task scheduling and hot-loading support for `.dll` plugins.
 

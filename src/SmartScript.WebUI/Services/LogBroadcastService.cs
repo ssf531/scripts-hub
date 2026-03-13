@@ -11,6 +11,8 @@ public class LogBroadcastService
     private readonly Lock _lock = new();
     private const int MaxRecentLogs = 500;
 
+    public event Action<LogEntry>? OnLogReceived;
+
     public LogBroadcastService(IHubContext<LogHub> hubContext)
     {
         _hubContext = hubContext;
@@ -24,6 +26,8 @@ public class LogBroadcastService
             if (_recentLogs.Count > MaxRecentLogs)
                 _recentLogs.RemoveAt(0);
         }
+
+        OnLogReceived?.Invoke(entry);
 
         await _hubContext.Clients.All.SendAsync("ReceiveLog", entry);
     }
