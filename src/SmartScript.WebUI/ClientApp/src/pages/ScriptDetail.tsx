@@ -3,8 +3,6 @@ import { useParams, Link } from "react-router-dom";
 import type { ScriptInfo, OllamaTestResult, EmailTestResult } from "../types";
 import { getScript, saveSettings } from "../api/scripts";
 import { testOllama, testEmail } from "../api/diagnostics";
-import { useLogHub } from "../hooks/useLogHub";
-import { LogConsole } from "../components/LogConsole";
 
 export function ScriptDetail() {
   const { name } = useParams<{ name: string }>();
@@ -22,8 +20,6 @@ export function ScriptDetail() {
     null,
   );
   const [emailResult, setEmailResult] = useState<EmailTestResult | null>(null);
-
-  const { logs, clearLogs, connectionError } = useLogHub({ scriptName: decodedName });
 
   useEffect(() => {
     if (!decodedName) return;
@@ -331,12 +327,6 @@ export function ScriptDetail() {
         </div>
       </div>
 
-      {/* Logs */}
-      <div className="row">
-        <div className="col-12 mb-4">
-          <LogConsole logs={logs} onClear={clearLogs} connectionError={connectionError} />
-        </div>
-      </div>
     </>
   );
 }
