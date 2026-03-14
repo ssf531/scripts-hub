@@ -57,9 +57,9 @@ export function Navbar({ collapsed, onToggle }: NavbarProps) {
             `nav-link text-white d-flex align-items-center ${isActive ? "bg-primary bg-opacity-25 rounded" : ""}`
           }
           title={collapsed ? "Dashboard" : undefined}
-          style={{ padding: collapsed ? "0.75rem 0.5rem" : "0.75rem 0.75rem" }}
+          style={{ padding: collapsed ? "0.75rem 0.5rem" : "0.75rem 0.75rem", minWidth: 0 }}
         >
-          <i className="bi bi-grid-1x2-fill me-2 flex-shrink-0"></i>
+          <i className="bi bi-grid-1x2-fill me-2 flex-shrink-0" style={{ minWidth: "1.25rem" }}></i>
           {!collapsed && "Dashboard"}
         </NavLink>
         <NavLink
@@ -68,9 +68,9 @@ export function Navbar({ collapsed, onToggle }: NavbarProps) {
             `nav-link text-white d-flex align-items-center ${isActive ? "bg-primary bg-opacity-25 rounded" : ""}`
           }
           title={collapsed ? "History" : undefined}
-          style={{ padding: collapsed ? "0.75rem 0.5rem" : "0.75rem 0.75rem" }}
+          style={{ padding: collapsed ? "0.75rem 0.5rem" : "0.75rem 0.75rem", minWidth: 0 }}
         >
-          <i className="bi bi-clock-history me-2 flex-shrink-0"></i>
+          <i className="bi bi-clock-history me-2 flex-shrink-0" style={{ minWidth: "1.25rem" }}></i>
           {!collapsed && "History"}
         </NavLink>
         <NavLink
@@ -79,9 +79,9 @@ export function Navbar({ collapsed, onToggle }: NavbarProps) {
             `nav-link text-white d-flex align-items-center ${isActive ? "bg-primary bg-opacity-25 rounded" : ""}`
           }
           title={collapsed ? "M3U8 Downloader" : undefined}
-          style={{ padding: collapsed ? "0.75rem 0.5rem" : "0.75rem 0.75rem" }}
+          style={{ padding: collapsed ? "0.75rem 0.5rem" : "0.75rem 0.75rem", minWidth: 0 }}
         >
-          <i className="bi bi-cloud-arrow-down me-2 flex-shrink-0"></i>
+          <i className="bi bi-cloud-arrow-down me-2 flex-shrink-0" style={{ minWidth: "1.25rem" }}></i>
           {!collapsed && "M3U8 Downloader"}
         </NavLink>
         <NavLink
@@ -90,9 +90,9 @@ export function Navbar({ collapsed, onToggle }: NavbarProps) {
             `nav-link text-white d-flex align-items-center ${isActive ? "bg-primary bg-opacity-25 rounded" : ""}`
           }
           title={collapsed ? "PDF Parser" : undefined}
-          style={{ padding: collapsed ? "0.75rem 0.5rem" : "0.75rem 0.75rem" }}
+          style={{ padding: collapsed ? "0.75rem 0.5rem" : "0.75rem 0.75rem", minWidth: 0 }}
         >
-          <i className="bi bi-file-earmark-pdf-fill me-2 flex-shrink-0"></i>
+          <i className="bi bi-file-earmark-pdf-fill me-2 flex-shrink-0" style={{ minWidth: "1.25rem" }}></i>
           {!collapsed && "PDF Parser"}
         </NavLink>
         <NavLink
@@ -101,9 +101,9 @@ export function Navbar({ collapsed, onToggle }: NavbarProps) {
             `nav-link text-white d-flex align-items-center ${isActive ? "bg-primary bg-opacity-25 rounded" : ""}`
           }
           title={collapsed ? "Spending Analysis" : undefined}
-          style={{ padding: collapsed ? "0.75rem 0.5rem" : "0.75rem 0.75rem" }}
+          style={{ padding: collapsed ? "0.75rem 0.5rem" : "0.75rem 0.75rem", minWidth: 0 }}
         >
-          <i className="bi bi-graph-up me-2 flex-shrink-0"></i>
+          <i className="bi bi-graph-up me-2 flex-shrink-0" style={{ minWidth: "1.25rem" }}></i>
           {!collapsed && "Spending Analysis"}
         </NavLink>
         <NavLink
@@ -112,9 +112,9 @@ export function Navbar({ collapsed, onToggle }: NavbarProps) {
             `nav-link text-white d-flex align-items-center ${isActive ? "bg-primary bg-opacity-25 rounded" : ""}`
           }
           title={collapsed ? "Settings" : undefined}
-          style={{ padding: collapsed ? "0.75rem 0.5rem" : "0.75rem 0.75rem" }}
+          style={{ padding: collapsed ? "0.75rem 0.5rem" : "0.75rem 0.75rem", minWidth: 0 }}
         >
-          <i className="bi bi-gear-fill me-2 flex-shrink-0"></i>
+          <i className="bi bi-gear-fill me-2 flex-shrink-0" style={{ minWidth: "1.25rem" }}></i>
           {!collapsed && "Settings"}
         </NavLink>
       </nav>
