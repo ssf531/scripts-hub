@@ -73,6 +73,8 @@ A 4-step wizard page that:
 - [x] `pages/SpendingAnalysis.tsx` — 4-step wizard
 - [x] `main.tsx` — routes `/pdf-parser` and `/spending-analysis` added
 - [x] `components/Navbar.tsx` — PDF Parser and Spending Analysis links added
+- [x] `App.tsx` + `components/LogConsole.tsx` — live logs moved to a shared collapsible bottom panel (all scripts, single SignalR connection); panel collapses to a 40px bar with entry count badge
+- [x] `pages/ScriptDetail.tsx` — Run/Stop button + state badge added to page header (breadcrumb row)
 
 ### Tests
 - [x] `PdfParserServiceTests.cs` — IsDate (Theory), GroupWordsIntoLines, ParseLineToTransaction
