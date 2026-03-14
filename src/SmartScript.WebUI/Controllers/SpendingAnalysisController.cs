@@ -64,13 +64,13 @@ public class SpendingAnalysisController(SpendingAnalysisService analysisService,
             request.Groups.Select(g => new { group = g.DisplayName, totalDebit = g.TotalDebit, count = g.Count }),
             new JsonSerializerOptions { WriteIndented = true });
 
-        var prompt = $"""
+        var prompt = $$"""
             You are a personal finance analyst. Below is a list of spending groups from a bank statement.
             For each group, assign ONE category from: Food & Dining, Transport, Shopping, Bills & Utilities, Healthcare, Entertainment, Savings & Transfers, Other.
-            Return ONLY a JSON array with no extra text: [{{"group":"<name>","category":"<cat>","confidence":"high|medium|low"}}]
+            Return ONLY a JSON array with no extra text: [{"group":"<name>","category":"<cat>","confidence":"high|medium|low"}]
 
             GROUPS:
-            {groupsJson}
+            {{groupsJson}}
             """;
 
         string raw;

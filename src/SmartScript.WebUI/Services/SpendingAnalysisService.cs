@@ -174,7 +174,7 @@ public partial class SpendingAnalysisService
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
-    internal static string NormaliseDescription(string description)
+    public static string NormaliseDescription(string description)
     {
         if (string.IsNullOrWhiteSpace(description)) return "(unknown)";
 

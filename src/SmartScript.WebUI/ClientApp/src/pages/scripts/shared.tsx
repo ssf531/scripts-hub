@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import type { ScriptInfo, SettingDefinition } from "../../types";
 import { getScript, saveSettings } from "../../api/scripts";
@@ -174,10 +174,18 @@ export function ScriptLogs({
   clearLogs: () => void;
   connectionError: string | null;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const onToggle = useCallback(() => setCollapsed((prev) => !prev), []);
   return (
     <div className="row">
       <div className="col-12 mb-4">
-        <LogConsole logs={logs} onClear={clearLogs} connectionError={connectionError} />
+        <LogConsole
+          logs={logs}
+          onClear={clearLogs}
+          connectionError={connectionError}
+          collapsed={collapsed}
+          onToggle={onToggle}
+        />
       </div>
     </div>
   );

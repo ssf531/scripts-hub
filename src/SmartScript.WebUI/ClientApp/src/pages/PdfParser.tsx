@@ -1,6 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
 import type {
-  ColumnDef,
   ColumnLayout,
   BankTransaction,
   ParsedFile,

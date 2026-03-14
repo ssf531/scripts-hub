@@ -188,7 +188,7 @@ public class PdfParserService
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
-    internal static List<List<Word>> GroupWordsIntoLines(List<Word> words, double yTolerance = 3.0)
+    public static List<List<Word>> GroupWordsIntoLines(List<Word> words, double yTolerance = 3.0)
     {
         if (words.Count == 0) return [];
 
@@ -224,7 +224,7 @@ public class PdfParserService
         return HeaderKeywords.Any(kw => lineText.Contains(kw));
     }
 
-    internal BankTransaction? ParseLineToTransaction(List<Word> line, ColumnLayout layout, string sourceFile)
+    public BankTransaction? ParseLineToTransaction(List<Word> line, ColumnLayout layout, string sourceFile)
     {
         // Group words by column
         var buckets = new Dictionary<string, List<string>>();
@@ -260,7 +260,7 @@ public class PdfParserService
     private static ColumnDef? FindColumn(double xCenter, ColumnLayout layout)
         => layout.Columns.FirstOrDefault(c => xCenter >= c.XMin && xCenter < c.XMax);
 
-    internal static bool IsDate(string text)
+    public static bool IsDate(string text)
         => DatePatterns.Any(p => p.IsMatch(text.Trim()));
 
     private static decimal? ParseAmount(Dictionary<string, List<string>> buckets, string columnName)
