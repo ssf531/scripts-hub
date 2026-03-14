@@ -6,15 +6,12 @@ import {
   runScript,
   stopScript,
 } from "../api/scripts";
-import { useLogHub } from "../hooks/useLogHub";
 import { ScriptCard } from "../components/ScriptCard";
-import { LogConsole } from "../components/LogConsole";
 
 export function Dashboard() {
   const [scripts, setScripts] = useState<ScriptInfo[]>([]);
   const [successRates, setSuccessRates] = useState<Record<string, number>>({});
   const [processing, setProcessing] = useState<Set<string>>(new Set());
-  const { logs, clearLogs, connectionError } = useLogHub();
 
   const loadData = useCallback(async () => {
     const [scriptList, rates] = await Promise.all([
@@ -98,7 +95,6 @@ export function Dashboard() {
         </div>
       )}
 
-      <LogConsole logs={logs} onClear={clearLogs} connectionError={connectionError} />
     </>
   );
 }

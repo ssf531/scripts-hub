@@ -1,10 +1,12 @@
+import { useEffect, useRef } from "react";
 import type { LogEntry } from "../types";
 
 interface LogConsoleProps {
   logs: LogEntry[];
   onClear: () => void;
-  height?: string;
   connectionError?: string | null;
+  collapsed: boolean;
+  onToggle: () => void;
 }
 
 function getLogLevelColor(level: string): string {
@@ -23,55 +25,104 @@ function getLogLevelColor(level: string): string {
 export function LogConsole({
   logs,
   onClear,
-  height = "400px",
   connectionError,
+  collapsed,
+  onToggle,
 }: LogConsoleProps) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!collapsed && bodyRef.current) {
+      bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+    }
+  }, [logs, collapsed]);
+
+  const errorCount = logs.filter((l) => l.level.toLowerCase() === "error").length;
+
   return (
-    <div className="card shadow-sm">
-      <div className="card-header d-flex justify-content-between align-items-center">
-        <h5 className="mb-0">
-          <i className="bi bi-terminal me-2"></i>Live Logs
-        </h5>
-        <button className="btn btn-outline-secondary btn-sm" onClick={onClear}>
-          <i className="bi bi-trash me-1"></i>Clear
-        </button>
-      </div>
-      {connectionError && (
-        <div className="alert alert-warning mb-0 rounded-0 py-2 small">
-          <i className="bi bi-exclamation-triangle me-1"></i>
-          {connectionError}
-        </div>
-      )}
-      <div className="card-body p-0">
-        <div
-          style={{
-            height,
-            overflowY: "auto",
-            fontFamily: "'Cascadia Code', 'Fira Code', monospace",
-            fontSize: "0.85rem",
-            padding: "0.75rem",
-            background: "#1e1e1e",
-            color: "#d4d4d4",
-          }}
-        >
-          {logs.length === 0 ? (
-            <div className="text-muted fst-italic">
-              No log entries. Start the script to see output.
-            </div>
-          ) : (
-            logs.map((log, i) => (
-              <div key={i} className="mb-1">
-                <span className="text-muted">
-                  [{new Date(log.timestamp).toLocaleTimeString()}]
-                </span>{" "}
-                <span className={getLogLevelColor(log.level)}>
-                  [{log.level}]
-                </span>{" "}
-                {log.message}
-              </div>
-            ))
+    <div
+      style={{
+        borderTop: "2px solid #333",
+        background: "#1e1e1e",
+        flexShrink: 0,
+        height: collapsed ? "40px" : "260px",
+        transition: "height 0.2s ease",
+        overflow: "hidden",
+      }}
+    >
+      {/* Toggle bar */}
+      <div
+        className="d-flex align-items-center gap-2 px-3"
+        style={{ height: "40px", cursor: "pointer", userSelect: "none" }}
+        onClick={onToggle}
+      >
+        <i className="bi bi-terminal text-secondary"></i>
+        <span className="text-light small fw-semibold">Live Logs</span>
+        {logs.length > 0 && (
+          <span
+            className={`badge ${errorCount > 0 ? "bg-danger" : "bg-secondary"} ms-1`}
+          >
+            {logs.length}
+          </span>
+        )}
+        {connectionError && (
+          <span className="badge bg-warning text-dark ms-1">disconnected</span>
+        )}
+        <span className="ms-auto d-flex align-items-center gap-3">
+          {!collapsed && (
+            <button
+              className="btn btn-link btn-sm text-secondary p-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClear();
+              }}
+              title="Clear logs"
+            >
+              <i className="bi bi-trash"></i>
+            </button>
           )}
-        </div>
+          <i
+            className={`bi ${collapsed ? "bi-chevron-up" : "bi-chevron-down"} text-secondary`}
+          ></i>
+        </span>
+      </div>
+
+      {/* Log body */}
+      <div
+        ref={bodyRef}
+        style={{
+          height: "220px",
+          overflowY: "auto",
+          fontFamily: "'Cascadia Code', 'Fira Code', monospace",
+          fontSize: "0.82rem",
+          padding: "0.4rem 0.75rem",
+          color: "#d4d4d4",
+        }}
+      >
+        {connectionError && (
+          <div className="text-warning mb-1 small">
+            <i className="bi bi-exclamation-triangle me-1"></i>
+            {connectionError}
+          </div>
+        )}
+        {logs.length === 0 ? (
+          <span className="text-muted fst-italic">
+            No log entries yet. Run a script to see output.
+          </span>
+        ) : (
+          logs.map((log, i) => (
+            <div key={i} className="mb-1">
+              <span style={{ color: "#858585" }}>
+                [{new Date(log.timestamp).toLocaleTimeString()}]
+              </span>{" "}
+              <span className={getLogLevelColor(log.level)}>[{log.level}]</span>{" "}
+              {log.scriptName && (
+                <span style={{ color: "#569cd6" }}>[{log.scriptName}]</span>
+              )}{" "}
+              <span>{log.message}</span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
