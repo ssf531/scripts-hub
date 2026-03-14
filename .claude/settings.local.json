@@ -8,10 +8,22 @@
       "Bash(where npm:*)",
       "Bash(where node:*)",
       "Bash(npm.cmd run:*)",
-      "Bash(find F:/Github-ssf531/scripts-hub -type f -name *.json)",
+      "Bash(npm run lint)",
+      "Bash(npm run test *)",
+      "Bash(find *)",
       "Bash(dotnet add:*)",
-      "Bash(dir /b \"F:\\\\Github-ssf531\\\\scripts-hub\\\\src\\\\SmartScript.WebUI\\\\wwwroot\")",
-      "Bash(dir /b \"F:\\\\Github-ssf531\\\\scripts-hub\\\\src\\\\SmartScript.WebUI\\\\wwwroot\\\\assets\")"
+      "Bash(dir /b )",
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(npm run:*)",
+      "Bash(grep -n \"ScriptLogs\" src/SmartScript.WebUI/ClientApp/src/pages/scripts/*.tsx)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)"
     ]
   }
 }
