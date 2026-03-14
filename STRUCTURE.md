@@ -86,7 +86,7 @@ SmartScript.WebUI/
 │   ├── index.html              # SPA entry point
 │   └── src/
 │       ├── main.tsx            # React entry, BrowserRouter setup
-│       ├── App.tsx             # Layout: sidebar Navbar + Outlet
+│       ├── App.tsx             # Layout: sidebar Navbar + Outlet + shared collapsible log panel
 │       ├── vite-env.d.ts       # CSS module type declarations
 │       ├── types/index.ts      # TypeScript interfaces (ScriptInfo, LogEntry, etc.)
 │       ├── api/
@@ -97,11 +97,14 @@ SmartScript.WebUI/
 │       ├── hooks/
 │       │   └── useLogHub.ts    # SignalR hook: connect, filter by script, auto-reconnect
 │       ├── pages/
-│       │   ├── Dashboard.tsx   # Card grid, Start/Stop, state badges, success rates, logs
-│       │   ├── ScriptDetail.tsx # Dynamic form engine + diagnostics + filtered log console
+│       │   ├── Dashboard.tsx   # Card grid, Start/Stop, state badges, success rates
+│       │   ├── ScriptDetail.tsx # Dynamic form engine + diagnostics + Run/Stop button
+│       │   ├── History.tsx     # Script run history log
+│       │   ├── PdfParser.tsx   # PDF bank statement parser wizard
+│       │   ├── SpendingAnalysis.tsx # Spending grouping, Excel export, AI categorisation
 │       │   └── Settings.tsx    # Global config display (Ollama URL, plugin dir, OAuth info)
 │       └── components/
-│           ├── LogConsole.tsx   # Reusable dark terminal-style log viewer
+│           ├── LogConsole.tsx   # Global collapsible bottom log panel (all scripts, shared)
 │           ├── ScriptCard.tsx   # Individual script card with state badge + progress bar
 │           └── Navbar.tsx       # Dark sidebar with active link highlighting
 ├── Data/
@@ -168,10 +171,10 @@ SmartScript.Core  (no dependencies)
 | ------------------- | -------------------------------- | ------------------------------------------------------ |
 | Script discovery    | ScriptExecutorService            | DI `IEnumerable<IScript>` + PluginLoader               |
 | Script execution    | ScriptHubService                 | Calls `IScript.ExecuteAsync` via ScriptManager         |
-| Real-time logs      | LogBroadcastService + LogHub     | SignalR push to connected React clients                |
+| Real-time logs      | LogBroadcastService + LogHub     | SignalR push to all clients; displayed in global bottom panel in App.tsx |
 | Script logging      | ScriptLogger                     | IScriptLogger impl delegates to LogBroadcastService    |
 | REST API            | Controllers/\*                   | ASP.NET Core controllers wrapping existing services    |
-| Dynamic settings UI | ScriptDetail.tsx                 | React form renders inputs from ScriptMetadata.Settings |
+| Dynamic settings UI | ScriptDetail.tsx                 | React form renders inputs from ScriptMetadata.Settings; Run/Stop button in header |
 | Diagnostics         | TestConnectionService            | Test Ollama connectivity, check Gmail credentials      |
 | Persistence         | AppDbContext                     | SQLite via EF Core (auto-created on startup)           |
 | Scheduling          | QuartzSchedulerService           | Cron-based via `ScriptMetadata.CronExpression`         |

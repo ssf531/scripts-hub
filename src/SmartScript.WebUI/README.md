@@ -34,6 +34,8 @@ SmartScript.WebUI/
 │       │   ├── Dashboard.tsx      # Script cards, start/stop, live logs
 │       │   ├── History.tsx        # Recent script run records
 │       │   ├── ScriptDetail.tsx   # Dispatcher → per-script page component
+│       │   ├── PdfParser.tsx      # PDF bank statement parser wizard
+│       │   ├── SpendingAnalysis.tsx # Spending grouping, Excel export, AI categorisation
 │       │   ├── Settings.tsx       # Read-only global config
 │       │   └── scripts/           # Per-script page components
 │       │       ├── shared.tsx              # useScriptPage hook, SettingField, SaveBar
@@ -41,7 +43,7 @@ SmartScript.WebUI/
 │       │       ├── EmailCleanerPage.tsx    # Settings + Ollama/Email diagnostics
 │       │       └── GenericScriptPage.tsx   # Fallback for any other script
 │       └── components/
-│           ├── LogConsole.tsx      # Reusable log display component
+│           ├── LogConsole.tsx      # Global collapsible bottom log panel (shared, all scripts)
 │           ├── ScriptCard.tsx      # Individual script card
 │           └── Navbar.tsx          # Sidebar navigation
 ├── Data/
@@ -66,6 +68,8 @@ SmartScript.WebUI/
 | Microsoft.EntityFrameworkCore.Sqlite | 9.x     | SQLite database provider   |
 | Microsoft.EntityFrameworkCore.Design | 9.x     | EF Core tooling support    |
 | Quartz.Extensions.Hosting            | 3.x     | Quartz hosted service + DI |
+| PdfPig                               | 0.1.9   | PDF text and coordinate extraction |
+| ClosedXML                            | 0.104.x | Excel (.xlsx) file generation |
 
 **Project references**: SmartScript.Core, SmartScript.Executor, SmartScript.Scripts.EmailCleaner, SmartScript.Scripts.M3u8Downloader
 
@@ -110,6 +114,24 @@ Managed via `ClientApp/package.json`:
 | ------ | ------------- | -------------------------------------- |
 | GET    | `/api/config` | Global config (Ollama URL, default model, credential path, plugin dir) |
 
+### PdfParserController
+
+| Method | Route                          | Description                                      |
+| ------ | ------------------------------ | ------------------------------------------------ |
+| POST   | `/api/pdf-parser/detect-layout`  | Detect column layout from uploaded PDF headers |
+| POST   | `/api/pdf-parser/preview-layout` | Preview column boundaries before full parse    |
+| POST   | `/api/pdf-parser/parse`          | Parse all PDFs using confirmed column layout   |
+| POST   | `/api/pdf-parser/validate`       | Validate parsed data with Ollama               |
+| POST   | `/api/pdf-parser/export`         | Export transactions as CSV                     |
+
+### SpendingAnalysisController
+
+| Method | Route                                  | Description                               |
+| ------ | -------------------------------------- | ----------------------------------------- |
+| POST   | `/api/spending-analysis/group`         | Group CSV transactions by description     |
+| POST   | `/api/spending-analysis/export-excel`  | Export grouped data as .xlsx              |
+| POST   | `/api/spending-analysis/categorise`    | AI categorisation of groups via Ollama    |
+
 ## React Pages
 
 ### Dashboard
@@ -121,7 +143,6 @@ Route: `/`
 - Start/Stop buttons to trigger or halt script execution via REST API.
 - Success rate percentage computed from `ScriptRunRecords`.
 - "Details" link navigates to the script's detail page.
-- Live log panel at the bottom using SignalR.
 
 ### ScriptDetail (Dispatcher)
 
@@ -159,6 +180,27 @@ Settings are persisted to SQLite on save. On page load, the API returns both `de
 
 - **Live Log Console**: Connects to SignalR `/hubs/log` hub filtered by script name. Timestamped, color-coded entries (Info=cyan, Warning=yellow, Error=red). Shows a warning banner if the SignalR connection fails.
 
+### History
+
+Route: `/history`
+
+- Displays a log of all past script runs with timestamps and results.
+
+### PDF Bank Statement Parser
+
+Route: `/pdf-parser`
+
+- 5-step wizard: upload PDFs → detect column layout → preview layout → parse transactions → validate with Ollama.
+- Exports parsed transactions to CSV.
+- Uses `PdfPig` for text extraction and column detection.
+
+### Spending Analysis
+
+Route: `/spending-analysis`
+
+- 4-step wizard: import CSV → group transactions by description → export to Excel → AI categorisation via Ollama.
+- Supports merging and renaming transaction groups.
+
 ### Settings
 
 Route: `/settings`
@@ -183,6 +225,8 @@ Orchestrates script execution from the API layer:
 ### LogBroadcastService
 
 Singleton service that accepts `LogEntry` objects and broadcasts them to all connected SignalR clients. Maintains a rolling buffer of the most recent 500 entries. Also exposes an `OnLogReceived` event for in-process subscribers.
+
+The React frontend connects once in `App.tsx` via `useLogHub()` and displays all incoming entries (from any script) in a **global collapsible log panel** pinned to the bottom of the UI. The panel collapses to a 40px bar showing a live entry count; clicking it expands to reveal the scrollable terminal view. Script name is shown inline for each entry.
 
 ### ScriptLogger
 
