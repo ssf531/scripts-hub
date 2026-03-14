@@ -39,7 +39,7 @@ export function Navbar({ collapsed, onToggle }: NavbarProps) {
       }}
     >
       <div
-        className="border-bottom border-secondary d-flex align-items-center justify-content-between"
+        className="border-bottom border-secondary d-flex align-items-center"
         style={{ padding: "1rem", minHeight: "60px" }}
       >
         {!collapsed && (
@@ -47,14 +47,6 @@ export function Navbar({ collapsed, onToggle }: NavbarProps) {
             <i className="bi bi-lightning-charge-fill me-2"></i>SmartScript Hub
           </span>
         )}
-        <button
-          className="btn btn-dark btn-sm p-0 flex-shrink-0"
-          onClick={onToggle}
-          title={collapsed ? "Expand" : "Collapse"}
-          style={{ width: "36px", height: "36px", minWidth: "36px" }}
-        >
-          <i className={`bi ${collapsed ? "bi-chevron-right" : "bi-chevron-left"}`}></i>
-        </button>
       </div>
 
       <nav className="nav flex-column" style={{ padding: "0.5rem", whiteSpace: collapsed ? "nowrap" : "normal" }}>
@@ -127,11 +119,21 @@ export function Navbar({ collapsed, onToggle }: NavbarProps) {
         </NavLink>
       </nav>
 
-      {!collapsed && (
-        <div className="mt-auto border-top border-secondary" style={{ padding: "1rem" }}>
-          <small className="text-muted">SmartScript Hub v1.0</small>
-        </div>
-      )}
+      <div className="mt-auto border-top border-secondary" style={{ padding: "0.5rem" }}>
+        {!collapsed && (
+          <div style={{ marginBottom: "0.5rem" }}>
+            <small className="text-muted">SmartScript Hub v1.0</small>
+          </div>
+        )}
+        <button
+          className="btn btn-dark btn-sm p-0 flex-shrink-0 w-100"
+          onClick={onToggle}
+          title={collapsed ? "Expand" : "Collapse"}
+          style={{ height: "36px" }}
+        >
+          <i className={`bi ${collapsed ? "bi-chevron-right" : "bi-chevron-left"}`}></i>
+        </button>
+      </div>
     </div>
   );
 }
