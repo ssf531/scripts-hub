@@ -77,3 +77,8 @@ build/
 
 # Docker
 .dockerignore
+
+# Playwright test artifacts
+playwright-report/
+test-results/
+.auth/
