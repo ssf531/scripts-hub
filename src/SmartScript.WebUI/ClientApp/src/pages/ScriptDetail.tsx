@@ -1,10 +1,8 @@
 import { useParams } from "react-router-dom";
-import { M3u8DownloaderPage } from "./scripts/M3u8DownloaderPage";
 import { EmailCleanerPage } from "./scripts/EmailCleanerPage";
 import { GenericScriptPage } from "./scripts/GenericScriptPage";
 
 const PAGES: Record<string, (name: string) => React.ReactElement> = {
-  "M3U8 Video Downloader": (name) => <M3u8DownloaderPage scriptName={name} />,
   "AI Email Cleaner": (name) => <EmailCleanerPage scriptName={name} />,
 };
 

@@ -43,6 +43,10 @@ public class ScriptHubService
         record.CompletedAt = DateTime.UtcNow;
         record.Success = result.Success;
         record.ResultMessage = result.Message;
+
+        if (result.UpdatedSettings.Count > 0)
+            await SaveSettingsAsync(script.Metadata.Name, result.UpdatedSettings);
+
         await db.SaveChangesAsync(ct);
 
         await _logService.BroadcastAsync(new LogEntry

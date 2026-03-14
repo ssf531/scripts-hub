@@ -31,6 +31,14 @@ export function Navbar() {
           <i className="bi bi-clock-history me-2"></i>History
         </NavLink>
         <NavLink
+          to="/m3u8-downloader"
+          className={({ isActive }) =>
+            `nav-link text-white ${isActive ? "bg-primary bg-opacity-25 rounded" : ""}`
+          }
+        >
+          <i className="bi bi-cloud-arrow-down me-2"></i>M3U8 Downloader
+        </NavLink>
+        <NavLink
           to="/pdf-parser"
           className={({ isActive }) =>
             `nav-link text-white ${isActive ? "bg-primary bg-opacity-25 rounded" : ""}`

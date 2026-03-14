@@ -18,7 +18,9 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(npm run:*)",
-      "Bash(grep -n \"ScriptLogs\" src/SmartScript.WebUI/ClientApp/src/pages/scripts/*.tsx)"
+      "Bash(grep -n \"ScriptLogs\" src/SmartScript.WebUI/ClientApp/src/pages/scripts/*.tsx)",
+      "Bash(sed -i 's|import { SpendingAnalysis } from \"\"./pages/SpendingAnalysis\"\";|import { SpendingAnalysis } from \"\"./pages/SpendingAnalysis\"\";\\\\nimport { M3u8DownloaderPage } from \"\"./pages/scripts/M3u8DownloaderPage\"\";|' main.tsx)",
+      "Bash(sed -i 's|<Route path=\"\"/spending-analysis\"\" element={<SpendingAnalysis />} />|<Route path=\"\"/spending-analysis\"\" element={<SpendingAnalysis />} />\\\\n          <Route path=\"\"/m3u8-downloader\"\" element={<M3u8DownloaderPage scriptName=\"\"M3U8 Video Downloader\"\" />} />|' main.tsx)"
     ],
     "deny": [
       "Read(./.env)",

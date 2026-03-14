@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 using SmartScript.Core.Interfaces;
 using SmartScript.Core.Models;
@@ -94,8 +95,8 @@ public class M3u8DownloaderScript : IScript
         var outputFormat = GetSetting(settings, "outputFormat", "mp4");
         var extraArgs = GetSetting(settings, "extraArgs", "");
 
-        // Parse queue entries
-        var entries = ParseQueue(queueRaw);
+        // Parse queue entries — keep raw lines in parallel for removal tracking
+        var (entries, rawLines) = ParseQueue(queueRaw);
         if (entries.Count == 0)
         {
             return new ScriptResult
@@ -117,6 +118,8 @@ public class M3u8DownloaderScript : IScript
         await _logger.LogAsync(Metadata.Name, $"Starting queue: {entries.Count} item(s) to download.");
 
         int completed = 0, failed = 0;
+        // Track which raw lines have been successfully downloaded (by index)
+        var completedIndices = new HashSet<int>();
 
         for (int i = 0; i < entries.Count; i++)
         {
@@ -131,6 +134,7 @@ public class M3u8DownloaderScript : IScript
                 if (success)
                 {
                     completed++;
+                    completedIndices.Add(i);
                     await _logger.LogAsync(Metadata.Name, $"[{i + 1}/{entries.Count}] Completed: {saveName}.{outputFormat}");
                 }
                 else
@@ -144,11 +148,13 @@ public class M3u8DownloaderScript : IScript
                 failed++;
                 var cancelMsg = $"Queue cancelled after {completed} completed, {failed} failed (item {i + 1}/{entries.Count}).";
                 await _logger.LogAsync(Metadata.Name, cancelMsg, LogLevel.Warning);
+                var remainingOnCancel = BuildRemainingQueue(rawLines, completedIndices);
                 return new ScriptResult
                 {
                     Success = false,
                     Message = cancelMsg,
-                    Details = new Dictionary<string, object> { ["completed"] = completed, ["failed"] = failed }
+                    Details = new Dictionary<string, object> { ["completed"] = completed, ["failed"] = failed },
+                    UpdatedSettings = new Dictionary<string, string> { ["downloadQueue"] = remainingOnCancel }
                 };
             }
         }
@@ -159,6 +165,7 @@ public class M3u8DownloaderScript : IScript
 
         await _logger.LogAsync(Metadata.Name, resultMsg, failed > 0 ? LogLevel.Warning : LogLevel.Info);
 
+        var remainingQueue = BuildRemainingQueue(rawLines, completedIndices);
         return new ScriptResult
         {
             Success = failed == 0,
@@ -168,7 +175,8 @@ public class M3u8DownloaderScript : IScript
                 ["total"] = entries.Count,
                 ["completed"] = completed,
                 ["failed"] = failed
-            }
+            },
+            UpdatedSettings = new Dictionary<string, string> { ["downloadQueue"] = remainingQueue }
         };
     }
 
@@ -225,10 +233,19 @@ public class M3u8DownloaderScript : IScript
         return process.ExitCode == 0;
     }
 
-    private static List<(string Url, string Name)> ParseQueue(string raw)
+    // Matches separators: pipe, tab, " | ", " - ", or 2+ spaces between URL and name
+    private static readonly Regex SeparatorRegex =
+        new(@"\s*[|\t]\s*|\s{2,}|\s+-\s+", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Returns parsed (url, name) entries AND the corresponding raw lines (aligned by index)
+    /// so callers can reconstruct the queue after removing completed items.
+    /// </summary>
+    private static (List<(string Url, string Name)> Entries, List<string> RawLines) ParseQueue(string raw)
     {
-        var result = new List<(string, string)>();
-        if (string.IsNullOrWhiteSpace(raw)) return result;
+        var entries = new List<(string, string)>();
+        var rawLines = new List<string>();
+        if (string.IsNullOrWhiteSpace(raw)) return (entries, rawLines);
 
         int autoIndex = 1;
         foreach (var line in raw.Split('\n'))
@@ -236,24 +253,38 @@ public class M3u8DownloaderScript : IScript
             var trimmed = line.Trim().TrimEnd('\r');
             if (string.IsNullOrWhiteSpace(trimmed)) continue;
 
-            var pipeIdx = trimmed.IndexOf('|');
-            if (pipeIdx > 0)
+            // Try to split on any supported separator
+            var parts = SeparatorRegex.Split(trimmed, 2);
+            if (parts.Length == 2)
             {
-                var url = trimmed[..pipeIdx].Trim();
-                var name = trimmed[(pipeIdx + 1)..].Trim();
+                var url = parts[0].Trim();
+                var name = parts[1].Trim();
                 if (!string.IsNullOrWhiteSpace(url) && !string.IsNullOrWhiteSpace(name))
-                    result.Add((url, name));
+                {
+                    entries.Add((url, name));
+                    rawLines.Add(trimmed);
+                }
             }
             else
             {
-                // No name provided — derive from URL or use auto-index
+                // No name — derive from URL or use auto-index
                 var name = DeriveNameFromUrl(trimmed) ?? $"video_{autoIndex}";
-                result.Add((trimmed, name));
+                entries.Add((trimmed, name));
+                rawLines.Add(trimmed);
                 autoIndex++;
             }
         }
 
-        return result;
+        return (entries, rawLines);
+    }
+
+    private static string BuildRemainingQueue(List<string> rawLines, HashSet<int> completedIndices)
+    {
+        var remaining = rawLines
+            .Select((line, i) => (line, i))
+            .Where(t => !completedIndices.Contains(t.i))
+            .Select(t => t.line);
+        return string.Join("\n", remaining);
     }
 
     private static string? DeriveNameFromUrl(string url)

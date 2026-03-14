@@ -81,7 +81,7 @@ export function Dashboard() {
         </div>
       ) : (
         <div className="row g-4 mb-4">
-          {scripts.map((script) => (
+          {scripts.filter((s) => s.name !== "M3U8 Video Downloader").map((script) => (
             <div key={script.name} className="col-md-6 col-lg-4">
               <ScriptCard
                 script={script}

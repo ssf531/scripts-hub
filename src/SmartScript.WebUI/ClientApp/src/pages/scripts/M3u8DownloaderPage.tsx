@@ -1,18 +1,99 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { M3u8DLTestResult } from "../../types";
 import { testM3u8DL } from "../../api/diagnostics";
 import {
   useScriptPage,
-  Breadcrumb,
   SettingField,
   SaveBar,
-  ScriptLogs,
 } from "./shared";
 
+// ── Queue entry model ──────────────────────────────────────────────────────────
+
+interface QueueEntry {
+  url: string;
+  name: string;
+}
+
+const SEP_RE = /\s*[|\t]\s*|\s{2,}|\s+-\s+/;
+
+function parseQueueText(raw: string): QueueEntry[] {
+  return raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0)
+    .map((l) => {
+      const m = SEP_RE.exec(l);
+      if (m && m.index > 0) {
+        return { url: l.slice(0, m.index).trim(), name: l.slice(m.index + m[0].length).trim() };
+      }
+      return { url: l, name: "" };
+    });
+}
+
+function serializeQueue(entries: QueueEntry[]): string {
+  return entries
+    .filter((e) => e.url.trim())
+    .map((e) => (e.name.trim() ? `${e.url.trim()}|${e.name.trim()}` : e.url.trim()))
+    .join("\n");
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
-  const { script, settings, set, saving, saveMessage, handleSave, logs, clearLogs, connectionError } =
+  const { script, settings, set, saving, saveMessage, handleSave } =
     useScriptPage(scriptName);
 
+  // ── Queue list state ────────────────────────────────────────────────────────
+  const [entries, setEntries] = useState<QueueEntry[]>([]);
+  const [initialized, setInitialized] = useState(false);
+
+  // Initialize once when settings first arrive
+  useEffect(() => {
+    if (!initialized && settings["downloadQueue"] !== undefined) {
+      setEntries(parseQueueText(settings["downloadQueue"]));
+      setInitialized(true);
+    }
+  }, [settings, initialized]);
+
+  const updateEntries = useCallback(
+    (next: QueueEntry[]) => {
+      setEntries(next);
+      set("downloadQueue")(serializeQueue(next));
+    },
+    [set],
+  );
+
+  const addRow = () => updateEntries([...entries, { url: "", name: "" }]);
+
+  const removeRow = (i: number) =>
+    updateEntries(entries.filter((_, idx) => idx !== i));
+
+  const updateRow = (i: number, field: "url" | "name", value: string) => {
+    const next = entries.map((e, idx) => (idx === i ? { ...e, [field]: value } : e));
+    updateEntries(next);
+  };
+
+  // Paste handler: split pasted text on newlines → add multiple entries at once
+  const handlePaste = (e: React.ClipboardEvent, rowIndex: number, field: "url" | "name") => {
+    const text = e.clipboardData.getData("text");
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l);
+    if (lines.length <= 1) return; // single line — let default paste handle it
+    e.preventDefault();
+
+    const newRows: QueueEntry[] = lines.map((l) => {
+      const m = SEP_RE.exec(l);
+      if (m && m.index > 0) {
+        return { url: l.slice(0, m.index).trim(), name: l.slice(m.index + m[0].length).trim() };
+      }
+      return field === "name" ? { url: entries[rowIndex]?.url ?? "", name: l } : { url: l, name: "" };
+    });
+
+    const next = [...entries];
+    next.splice(rowIndex, 1, ...newRows);
+    updateEntries(next);
+  };
+
+  // ── Diagnostics ─────────────────────────────────────────────────────────────
   const [testingExe, setTestingExe] = useState(false);
   const [exeResult, setExeResult] = useState<M3u8DLTestResult | null>(null);
 
@@ -29,35 +110,85 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
 
   if (!script) return null;
 
-  const queueSetting = script.settings.find((s) => s.key === "downloadQueue");
   const otherSettings = script.settings.filter((s) => s.key !== "downloadQueue");
 
   return (
     <>
-      <Breadcrumb name={scriptName} />
+      <h3 className="mb-4">
+        <i className="bi bi-cloud-arrow-down me-2"></i>M3U8 Downloader
+      </h3>
 
       {/* Row 1: Queue (col-8) + Diagnostics (col-4) */}
       <div className="row mb-4">
         {/* Download Queue */}
         <div className="col-md-8 mb-4 mb-md-0">
           <div className="card shadow-sm h-100">
-            <div className="card-header">
+            <div className="card-header d-flex align-items-center justify-content-between">
               <h5 className="mb-0">
                 <i className="bi bi-collection-play me-2"></i>Download Queue
+                {entries.length > 0 && (
+                  <span className="badge bg-secondary ms-2">{entries.length}</span>
+                )}
               </h5>
+              <button className="btn btn-outline-primary btn-sm" onClick={addRow}>
+                <i className="bi bi-plus-lg me-1"></i>Add
+              </button>
             </div>
-            <div className="card-body d-flex flex-column">
-              <p className="text-muted small mb-2">
-                One download per line —{" "}
-                <code className="text-body-secondary">URL|Filename</code> or just a URL
-                (filename is auto-detected from the URL).
-              </p>
-              {queueSetting && (
-                <SettingField
-                  setting={{ ...queueSetting, displayName: "" }}
-                  value={settings[queueSetting.key] ?? ""}
-                  onChange={set(queueSetting.key)}
-                />
+            <div className="card-body">
+              {entries.length === 0 ? (
+                <div className="text-center py-4 text-muted">
+                  <i className="bi bi-inbox fs-2 d-block mb-2"></i>
+                  <div className="small">No downloads queued. Click <strong>Add</strong> or paste URLs.</div>
+                </div>
+              ) : (
+                <div>
+                  {/* Header row */}
+                  <div className="row gx-2 mb-1">
+                    <div className="col">
+                      <span className="form-label small text-muted mb-0">URL</span>
+                    </div>
+                    <div className="col-4">
+                      <span className="form-label small text-muted mb-0">Filename (optional)</span>
+                    </div>
+                    <div style={{ width: "36px" }} />
+                  </div>
+                  {entries.map((entry, i) => (
+                    <div key={i} className="row gx-2 mb-2 align-items-center">
+                      <div className="col">
+                        <input
+                          type="text"
+                          className="form-control form-control-sm font-monospace"
+                          placeholder="https://example.com/stream.m3u8"
+                          value={entry.url}
+                          onChange={(e) => updateRow(i, "url", e.target.value)}
+                          onPaste={(e) => handlePaste(e, i, "url")}
+                        />
+                      </div>
+                      <div className="col-4">
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          placeholder="auto-detect"
+                          value={entry.name}
+                          onChange={(e) => updateRow(i, "name", e.target.value)}
+                          onPaste={(e) => handlePaste(e, i, "name")}
+                        />
+                      </div>
+                      <div style={{ width: "36px" }}>
+                        <button
+                          className="btn btn-outline-danger btn-sm"
+                          onClick={() => removeRow(i)}
+                          title="Remove"
+                        >
+                          <i className="bi bi-x-lg"></i>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <button className="btn btn-outline-secondary btn-sm mt-1" onClick={addRow}>
+                    <i className="bi bi-plus-lg me-1"></i>Add another
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -121,7 +252,7 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
         </div>
       </div>
 
-      {/* Row 2: Settings (compact, 3 columns) */}
+      {/* Row 2: Settings */}
       <div className="row mb-3">
         <div className="col-12">
           <div className="card shadow-sm">
@@ -153,8 +284,6 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
           <SaveBar saving={saving} message={saveMessage} onSave={handleSave} />
         </div>
       </div>
-
-      <ScriptLogs logs={logs} clearLogs={clearLogs} connectionError={connectionError} />
     </>
   );
 }
