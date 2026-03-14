@@ -6,7 +6,7 @@ import { useLogHub } from "./hooks/useLogHub";
 
 export function App() {
   const [logCollapsed, setLogCollapsed] = useState(true);
-  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(() => window.innerWidth < 768);
   const { logs, clearLogs, connectionError } = useLogHub();
 
   return (
