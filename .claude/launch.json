@@ -9,9 +9,9 @@
     },
     {
       "name": "Vite Frontend (dev)",
-      "runtimeExecutable": "npm.cmd",
+      "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "src/SmartScript.WebUI/ClientApp", "run", "dev"],
-      "port": 3000
+      "port": 5173
     }
   ]
 }
