@@ -8,10 +8,10 @@ interface NavbarProps {
 
 const NAV_ITEMS = [
   { to: "/", end: true, icon: "bi-grid-1x2-fill", label: "Dashboard" },
-  { to: "/history", icon: "bi-clock-history", label: "History" },
   { to: "/m3u8-downloader", icon: "bi-cloud-arrow-down", label: "M3U8 Downloader" },
   { to: "/pdf-parser", icon: "bi-file-earmark-pdf-fill", label: "PDF Parser" },
   { to: "/spending-analysis", icon: "bi-graph-up", label: "Spending Analysis" },
+  { to: "/history", icon: "bi-clock-history", label: "History" },
   { to: "/settings", icon: "bi-gear-fill", label: "Settings" },
 ];
 

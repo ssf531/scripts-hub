@@ -61,13 +61,13 @@ export function History() {
       )}
 
       {!loading && !error && runs.length > 0 && (
-        <div className="card shadow-sm">
-          <div className="card-header d-flex justify-content-between align-items-center">
+        <div className="card shadow-sm d-flex flex-column" style={{ maxHeight: "calc(100vh - 200px)" }}>
+          <div className="card-header d-flex justify-content-between align-items-center flex-shrink-0">
             <h5 className="mb-0">
               <i className="bi bi-list-check me-2"></i>Last {runs.length} Runs
             </h5>
           </div>
-          <div className="card-body p-0">
+          <div className="card-body p-0 overflow-y-auto">
             <div className="table-responsive">
               <table className="table table-sm mb-0 align-middle">
                 <thead className="table-light">
