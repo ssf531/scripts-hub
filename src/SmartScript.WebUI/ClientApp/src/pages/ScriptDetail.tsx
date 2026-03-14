@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import type { ScriptInfo, OllamaTestResult, EmailTestResult } from "../types";
-import { getScript, saveSettings } from "../api/scripts";
+import { getScript, saveSettings, runScript, stopScript } from "../api/scripts";
 import { testOllama, testEmail } from "../api/diagnostics";
 
 export function ScriptDetail() {
@@ -20,6 +20,7 @@ export function ScriptDetail() {
     null,
   );
   const [emailResult, setEmailResult] = useState<EmailTestResult | null>(null);
+  const [running, setRunning] = useState(false);
 
   useEffect(() => {
     if (!decodedName) return;
@@ -80,6 +81,29 @@ export function ScriptDetail() {
     setTestingEmail(false);
   };
 
+  const handleRun = async () => {
+    if (!script) return;
+    setRunning(true);
+    setScript((prev) => prev ? { ...prev, state: "running" } : prev);
+    try {
+      const result = await runScript(script.name);
+      setScript((prev) => prev ? { ...prev, state: result.state } : prev);
+    } catch {
+      setScript((prev) => prev ? { ...prev, state: "error" } : prev);
+    }
+    setRunning(false);
+  };
+
+  const handleStop = async () => {
+    if (!script) return;
+    try {
+      const result = await stopScript(script.name);
+      setScript((prev) => prev ? { ...prev, state: result.state } : prev);
+    } catch {
+      /* ignore */
+    }
+  };
+
   if (!script) {
     return (
       <div className="alert alert-warning">
@@ -95,14 +119,50 @@ export function ScriptDetail() {
 
   return (
     <>
-      <nav aria-label="breadcrumb" className="mb-3">
-        <ol className="breadcrumb">
-          <li className="breadcrumb-item">
-            <Link to="/">Dashboard</Link>
-          </li>
-          <li className="breadcrumb-item active">{decodedName}</li>
-        </ol>
-      </nav>
+      <div className="d-flex align-items-center justify-content-between mb-3">
+        <nav aria-label="breadcrumb">
+          <ol className="breadcrumb mb-0">
+            <li className="breadcrumb-item">
+              <Link to="/">Dashboard</Link>
+            </li>
+            <li className="breadcrumb-item active">{decodedName}</li>
+          </ol>
+        </nav>
+        <div className="d-flex align-items-center gap-2">
+          {script.state === "running" ? (
+            <button
+              className="btn btn-danger btn-sm"
+              onClick={handleStop}
+            >
+              <i className="bi bi-stop-fill me-1"></i>Stop
+            </button>
+          ) : (
+            <button
+              className="btn btn-success btn-sm"
+              onClick={handleRun}
+              disabled={running}
+            >
+              {running ? (
+                <span className="spinner-border spinner-border-sm me-1"></span>
+              ) : (
+                <i className="bi bi-play-fill me-1"></i>
+              )}
+              Run
+            </button>
+          )}
+          <span
+            className={`badge ${
+              script.state === "running"
+                ? "bg-success"
+                : script.state === "error"
+                  ? "bg-danger"
+                  : "bg-secondary"
+            }`}
+          >
+            {script.state}
+          </span>
+        </div>
+      </div>
 
       <div className="row">
         {/* Settings Panel */}
