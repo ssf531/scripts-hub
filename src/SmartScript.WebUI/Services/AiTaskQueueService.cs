@@ -80,6 +80,9 @@ public class AiTaskQueueService : BackgroundService, IAiTaskQueue
             using var scope = _serviceProvider.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+            // Ensure the AiTasks table exists (in case EnsureCreatedAsync didn't run yet)
+            await db.Database.EnsureCreatedAsync(ct);
+
             var incomplete = await db.AiTasks
                 .Where(t => t.Status == AiTaskStatus.Pending || t.Status == AiTaskStatus.Running)
                 .OrderBy(t => t.Id)
