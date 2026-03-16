@@ -6,11 +6,10 @@ import {
   Breadcrumb,
   SettingField,
   SaveBar,
-  ScriptLogs,
 } from "./shared";
 
 export function EmailCleanerPage({ scriptName }: { scriptName: string }) {
-  const { script, settings, set, saving, saveMessage, handleSave, logs, clearLogs, connectionError } =
+  const { script, settings, set, saving, saveMessage, handleSave } =
     useScriptPage(scriptName);
 
   const [testingOllama, setTestingOllama] = useState(false);
@@ -182,8 +181,6 @@ export function EmailCleanerPage({ scriptName }: { scriptName: string }) {
           </div>
         </div>
       </div>
-
-      <ScriptLogs logs={logs} clearLogs={clearLogs} connectionError={connectionError} />
     </>
   );
 }

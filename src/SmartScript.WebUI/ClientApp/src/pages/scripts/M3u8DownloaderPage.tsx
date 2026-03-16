@@ -6,6 +6,7 @@ import {
   SettingField,
   SaveBar,
 } from "./shared";
+import { runScript, stopScript } from "../../api/scripts";
 
 // ── Queue entry model ──────────────────────────────────────────────────────────
 
@@ -42,6 +43,30 @@ function serializeQueue(entries: QueueEntry[]): string {
 export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
   const { script, settings, set, saving, saveMessage, handleSave } =
     useScriptPage(scriptName);
+
+  const [running, setRunning] = useState(false);
+  const [runState, setRunState] = useState<string | null>(null);
+
+  const handleRun = async () => {
+    setRunning(true);
+    setRunState(null);
+    try {
+      const result = await runScript(scriptName);
+      setRunState(result.state);
+    } catch (err) {
+      setRunState("error");
+    }
+    setRunning(false);
+  };
+
+  const handleStop = async () => {
+    try {
+      const result = await stopScript(scriptName);
+      setRunState(result.state);
+    } catch {
+      /* ignore */
+    }
+  };
 
   // ── Queue list state ────────────────────────────────────────────────────────
   const [entries, setEntries] = useState<QueueEntry[]>([]);
@@ -118,11 +143,10 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
         <i className="bi bi-cloud-arrow-down me-2"></i>M3U8 Downloader
       </h3>
 
-      {/* Row 1: Queue (col-8) + Diagnostics (col-4) */}
+      {/* Row 1: Download Queue (full width) */}
       <div className="row mb-4">
-        {/* Download Queue */}
-        <div className="col-md-8 mb-4 mb-md-0">
-          <div className="card shadow-sm h-100">
+        <div className="col-12">
+          <div className="card shadow-sm">
             <div className="card-header d-flex align-items-center justify-content-between">
               <h5 className="mb-0">
                 <i className="bi bi-collection-play me-2"></i>Download Queue
@@ -130,9 +154,25 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
                   <span className="badge bg-secondary ms-2">{entries.length}</span>
                 )}
               </h5>
-              <button className="btn btn-outline-primary btn-sm" onClick={addRow}>
-                <i className="bi bi-plus-lg me-1"></i>Add
-              </button>
+              <div className="d-flex gap-2">
+                <button className="btn btn-outline-primary btn-sm" onClick={addRow}>
+                  <i className="bi bi-plus-lg me-1"></i>Add
+                </button>
+                {runState === "running" ? (
+                  <button className="btn btn-warning btn-sm" onClick={handleStop}>
+                    <i className="bi bi-stop-fill me-1"></i>Stop
+                  </button>
+                ) : (
+                  <button className="btn btn-success btn-sm" onClick={handleRun} disabled={running}>
+                    {running ? (
+                      <span className="spinner-border spinner-border-sm me-1"></span>
+                    ) : (
+                      <i className="bi bi-play-fill me-1"></i>
+                    )}
+                    Run
+                  </button>
+                )}
+              </div>
             </div>
             <div className="card-body">
               {entries.length === 0 ? (
@@ -191,11 +231,46 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
                 </div>
               )}
             </div>
+            {runState && runState !== "running" && (
+              <div className="card-footer">
+                <span className={`small ${runState === "error" ? "text-danger" : "text-muted"}`}>
+                  Last run: {runState}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 2: Settings (col-7) + Diagnostics (col-5) side by side */}
+      <div className="row mb-4">
+        <div className="col-md-7 mb-4 mb-md-0">
+          <div className="card shadow-sm h-100">
+            <div className="card-header">
+              <h5 className="mb-0">
+                <i className="bi bi-sliders me-2"></i>Settings
+              </h5>
+            </div>
+            <div className="card-body d-flex flex-column">
+              <div className="flex-fill">
+                <div className="row">
+                  {otherSettings.map((s) => (
+                    <div key={s.key} className="col-md-6">
+                      <SettingField
+                        setting={s}
+                        value={settings[s.key] ?? ""}
+                        onChange={set(s.key)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <SaveBar saving={saving} message={saveMessage} onSave={handleSave} />
+            </div>
           </div>
         </div>
 
-        {/* Diagnostics */}
-        <div className="col-md-4">
+        <div className="col-md-5">
           <div className="card shadow-sm h-100">
             <div className="card-header">
               <h5 className="mb-0">
@@ -249,39 +324,6 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
               )}
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Row 2: Settings */}
-      <div className="row mb-3">
-        <div className="col-12">
-          <div className="card shadow-sm">
-            <div className="card-header">
-              <h5 className="mb-0">
-                <i className="bi bi-sliders me-2"></i>Settings
-              </h5>
-            </div>
-            <div className="card-body">
-              <div className="row">
-                {otherSettings.map((s) => (
-                  <div key={s.key} className="col-md-4">
-                    <SettingField
-                      setting={s}
-                      value={settings[s.key] ?? ""}
-                      onChange={set(s.key)}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Save row */}
-      <div className="row mb-4">
-        <div className="col-12">
-          <SaveBar saving={saving} message={saveMessage} onSave={handleSave} />
         </div>
       </div>
     </>

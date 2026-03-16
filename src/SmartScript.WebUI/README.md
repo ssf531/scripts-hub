@@ -152,10 +152,9 @@ Route: `/script/:name`
 
 #### M3u8DownloaderPage
 
-- **Download Queue card**: Large textarea for `URL|Filename` entries (one per line). Plain URLs are also accepted — filename is auto-detected.
-- **Diagnostics card**: "Test N_m3u8DL-RE" button runs `--version` to confirm the executable is installed and accessible.
-- **Settings card**: Compact 3-column grid — Save Directory, Executable Path, Thread Count (slider), Output Format, Extra Arguments.
-- **Save Settings**: Single save button below the Settings card saves all settings (queue + config) at once.
+- **Download Queue card** (full width): Interactive table of URL + Filename pairs. Supports paste-to-expand (paste multiple lines at once to add rows automatically). Header contains **Add** and **Run / Stop** buttons; a footer shows the last run state after execution.
+- **Settings card** (left, ~60%): Two-column grid — Save Directory, Executable Path, Thread Count (slider), Output Format, Extra Arguments. Save Settings button is embedded at the bottom.
+- **Diagnostics card** (right, ~40%): "Test N_m3u8DL-RE" button runs `--version` to confirm the executable is installed and accessible.
 
 #### EmailCleanerPage
 
