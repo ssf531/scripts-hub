@@ -39,7 +39,7 @@ export interface ParsedFile {
 }
 
 export interface ValidationResult {
-  report: string;
+  taskId: number;
 }
 
 // API functions

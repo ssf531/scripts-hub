@@ -9,6 +9,7 @@ import { History } from "./pages/History";
 import { PdfParser } from "./pages/PdfParser";
 import { SpendingAnalysis } from "./pages/SpendingAnalysis";
 import { M3u8DownloaderPage } from "./pages/scripts/M3u8DownloaderPage";
+import { AiQueue } from "./pages/AiQueue";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap-icons/font/bootstrap-icons.min.css";
 
@@ -23,6 +24,7 @@ createRoot(document.getElementById("root")!).render(
           <Route path="/history" element={<History />} />
           <Route path="/pdf-parser" element={<PdfParser />} />
           <Route path="/spending-analysis" element={<SpendingAnalysis />} />
+          <Route path="/ai-queue" element={<AiQueue />} />
           <Route path="/m3u8-downloader" element={<M3u8DownloaderPage scriptName="M3U8 Video Downloader" />} />
         </Route>
       </Routes>

@@ -1,14 +1,13 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using SmartScript.Core.Services;
 using SmartScript.WebUI.Services;
 
 namespace SmartScript.WebUI.Controllers;
 
 [ApiController]
 [Route("api/pdf-parser")]
-public class PdfParserController(PdfParserService parserService, IOllamaClient ollamaClient) : ControllerBase
+public class PdfParserController(PdfParserService parserService, IAiTaskQueue aiTaskQueue) : ControllerBase
 {
     // POST /api/pdf-parser/detect-layout
     // Analyses the first uploaded PDF and returns detected column layout.
@@ -84,7 +83,7 @@ public class PdfParserController(PdfParserService parserService, IOllamaClient o
     }
 
     // POST /api/pdf-parser/validate
-    // Sends parsed transactions + raw PDF text to Ollama for verification.
+    // Enqueues an Ollama validation task and returns the task ID immediately (202 Accepted).
     [HttpPost("validate")]
     public async Task<IActionResult> Validate([FromBody] ValidateRequest request, CancellationToken ct)
     {
@@ -106,17 +105,14 @@ public class PdfParserController(PdfParserService parserService, IOllamaClient o
             {transactionsJson}
             """;
 
-        string report;
-        try
-        {
-            report = await ollamaClient.GenerateAsync(prompt, request.Model ?? "llama3.2", ct);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { error = ex.Message });
-        }
+        var taskId = await aiTaskQueue.EnqueueAsync(
+            type:        "PdfValidation",
+            description: $"Validate {request.Transactions.Count} transaction(s)",
+            prompt:      prompt,
+            model:       request.Model ?? "llama3.2",
+            ct:          ct);
 
-        return Ok(new { report });
+        return Accepted(new { taskId });
     }
 
     // POST /api/pdf-parser/export

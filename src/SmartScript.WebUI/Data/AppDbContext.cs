@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
 
     public DbSet<ScriptRunRecord> ScriptRunRecords => Set<ScriptRunRecord>();
     public DbSet<ScriptSettingEntity> ScriptSettings => Set<ScriptSettingEntity>();
+    public DbSet<AiTask> AiTasks => Set<AiTask>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -24,6 +25,13 @@ public class AppDbContext : DbContext
         {
             e.HasKey(s => s.Id);
             e.HasIndex(s => new { s.ScriptName, s.Key }).IsUnique();
+        });
+
+        modelBuilder.Entity<AiTask>(e =>
+        {
+            e.HasKey(t => t.Id);
+            e.HasIndex(t => t.Status);
+            e.HasIndex(t => t.CreatedAt);
         });
     }
 }

@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import type {
   ColumnLayout,
   BankTransaction,
@@ -12,6 +13,8 @@ import {
   validateTransactions,
   exportCsv,
 } from "../api/pdf";
+import { getAiTask } from "../api/aiTasks";
+import type { AiTask } from "../api/aiTasks";
 
 // ── Step progress bar ─────────────────────────────────────────────────────────
 
@@ -139,8 +142,10 @@ export function PdfParser() {
   const [ollamaModel, setOllamaModel] = useState("llama3.2");
   const [selectedFileIdx, setSelectedFileIdx] = useState(0);
   const [validating, setValidating] = useState(false);
-  const [validationReport, setValidationReport] = useState<string | null>(null);
   const [validateError, setValidateError] = useState<string | null>(null);
+  const [validationTaskId, setValidationTaskId] = useState<number | null>(null);
+  const [validationTask, setValidationTask] = useState<AiTask | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // All merged transactions
   const allTransactions: BankTransaction[] = parsedFiles.flatMap((f) => f.transactions);
@@ -211,23 +216,45 @@ export function PdfParser() {
     }
   }, [files, layout]);
 
-  // ── Step 5: validate ──────────────────────────────────────────────────────
+  // ── Step 5: validate via AI task queue ───────────────────────────────────
+
+  const stopPolling = () => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+  };
+
+  useEffect(() => () => stopPolling(), []);
+
+  const pollTask = useCallback(async (taskId: number) => {
+    try {
+      const task = await getAiTask(taskId);
+      setValidationTask(task);
+      if (task.status === "Completed" || task.status === "Failed") {
+        stopPolling();
+        setValidating(false);
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   const runValidate = useCallback(async () => {
     if (parsedFiles.length === 0) return;
     const target = parsedFiles[selectedFileIdx];
     setValidating(true);
     setValidateError(null);
-    setValidationReport(null);
+    setValidationTask(null);
+    setValidationTaskId(null);
+    stopPolling();
     try {
       const result = await validateTransactions(target.transactions, target.rawText, ollamaModel);
-      setValidationReport(result.report);
+      setValidationTaskId(result.taskId);
+      // Start polling every 2s
+      pollRef.current = setInterval(() => pollTask(result.taskId), 2000);
+      // Immediately fetch once
+      pollTask(result.taskId);
     } catch (e: unknown) {
       setValidateError(e instanceof Error ? e.message : String(e));
-    } finally {
       setValidating(false);
     }
-  }, [parsedFiles, selectedFileIdx, ollamaModel]);
+  }, [parsedFiles, selectedFileIdx, ollamaModel, pollTask]);
 
   // ── Export CSV ────────────────────────────────────────────────────────────
 
@@ -242,12 +269,14 @@ export function PdfParser() {
   // ── Reset ─────────────────────────────────────────────────────────────────
 
   const handleReset = () => {
+    stopPolling();
     setStep(0);
     setFiles([]);
     setLayout(null);
     setPreviewRows([]);
     setParsedFiles([]);
-    setValidationReport(null);
+    setValidationTask(null);
+    setValidationTaskId(null);
     setValidateError(null);
     setDetectError(null);
     setPreviewError(null);
@@ -808,8 +837,8 @@ export function PdfParser() {
             <div>
               <h5 className="mb-3"><i className="bi bi-shield-check me-2"></i>Validate with Ollama</h5>
               <p className="text-muted">
-                Ollama will compare the raw PDF text against the parsed transactions and report any
-                discrepancies.
+                Submits an AI validation task to the queue. Ollama compares the raw PDF text against
+                the parsed transactions and reports discrepancies.
               </p>
 
               <div className="row g-3 mb-3">
@@ -844,13 +873,9 @@ export function PdfParser() {
                 onClick={runValidate}
               >
                 {validating ? (
-                  <>
-                    <span className="spinner-border spinner-border-sm me-2"></span>Validating…
-                  </>
+                  <><span className="spinner-border spinner-border-sm me-2"></span>Waiting for result…</>
                 ) : (
-                  <>
-                    <i className="bi bi-shield-check me-2"></i>Run Validation
-                  </>
+                  <><i className="bi bi-shield-check me-2"></i>Run Validation</>
                 )}
               </button>
 
@@ -864,11 +889,31 @@ export function PdfParser() {
                 </div>
               )}
 
-              {validationReport && (
+              {validationTaskId && !validationTask && (
+                <div className="alert alert-info">
+                  <span className="spinner-border spinner-border-sm me-2"></span>
+                  Task #{validationTaskId} queued — waiting for Ollama…
+                </div>
+              )}
+
+              {validationTask?.status === "Running" && (
+                <div className="alert alert-primary">
+                  <span className="spinner-border spinner-border-sm me-2"></span>
+                  Task #{validationTask.id} running on {validationTask.model}…
+                </div>
+              )}
+
+              {validationTask?.status === "Failed" && (
+                <div className="alert alert-danger">
+                  <i className="bi bi-x-circle me-2"></i>
+                  Task failed: {validationTask.errorMessage}
+                </div>
+              )}
+
+              {validationTask?.status === "Completed" && validationTask.output && (
                 <div>
-                  {/* Status badge */}
-                  <div className="mb-2">
-                    {/discrepan|mismatch|error|missing|incorrect/i.test(validationReport) ? (
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    {/discrepan|mismatch|error|missing|incorrect/i.test(validationTask.output) ? (
                       <span className="badge bg-warning text-dark fs-6">
                         <i className="bi bi-exclamation-triangle me-1"></i>Issues Found
                       </span>
@@ -877,12 +922,13 @@ export function PdfParser() {
                         <i className="bi bi-check-circle me-1"></i>Valid
                       </span>
                     )}
+                    <small className="text-muted">
+                      Task #{validationTask.id} —{" "}
+                      <Link to="/ai-queue" className="text-muted">View in AI Queue</Link>
+                    </small>
                   </div>
-                  <pre
-                    className="bg-light p-3 rounded border"
-                    style={{ whiteSpace: "pre-wrap", fontSize: 13 }}
-                  >
-                    {validationReport}
+                  <pre className="bg-light p-3 rounded border" style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>
+                    {validationTask.output}
                   </pre>
                 </div>
               )}

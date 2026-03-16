@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { to: "/m3u8-downloader", icon: "bi-cloud-arrow-down", label: "M3U8 Downloader" },
   { to: "/pdf-parser", icon: "bi-file-earmark-pdf-fill", label: "PDF Parser" },
   { to: "/spending-analysis", icon: "bi-graph-up", label: "Spending Analysis" },
+  { to: "/ai-queue", icon: "bi-cpu", label: "AI Queue" },
   { to: "/history", icon: "bi-clock-history", label: "History" },
   { to: "/settings", icon: "bi-gear-fill", label: "Settings" },
 ];

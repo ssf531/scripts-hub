@@ -39,7 +39,7 @@ var ollamaUrl = builder.Configuration["OLLAMA_BASE_URL"]
 builder.Services.AddHttpClient<IOllamaClient, OllamaClient>(client =>
 {
     client.BaseAddress = new Uri(ollamaUrl);
-    client.Timeout = TimeSpan.FromMinutes(5);
+    client.Timeout = TimeSpan.FromMinutes(10);
 });
 
 // PDF parser & spending analysis
@@ -56,6 +56,11 @@ builder.Services.AddSingleton<ScriptManager>();
 // Built-in scripts
 builder.Services.AddTransient<IScript, EmailCleanerScript>();
 builder.Services.AddTransient<IScript, M3u8DownloaderScript>();
+
+// AI task queue (singleton + hosted service)
+builder.Services.AddSingleton<AiTaskQueueService>();
+builder.Services.AddSingleton<IAiTaskQueue>(sp => sp.GetRequiredService<AiTaskQueueService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<AiTaskQueueService>());
 
 // Plugin loader & executor
 var pluginDir = builder.Configuration["PluginDirectory"] ?? "/app/plugins";

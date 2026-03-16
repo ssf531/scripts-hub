@@ -2,8 +2,6 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
-using NSubstitute.ExceptionExtensions;
-using SmartScript.Core.Services;
 using SmartScript.WebUI.Controllers;
 using SmartScript.WebUI.Services;
 using Xunit;
@@ -12,10 +10,10 @@ namespace SmartScript.Tests;
 
 public class PdfParserControllerTests
 {
-    private readonly IOllamaClient _ollama = Substitute.For<IOllamaClient>();
+    private readonly IAiTaskQueue _queue = Substitute.For<IAiTaskQueue>();
     private readonly PdfParserService _parserService = new();
 
-    private PdfParserController CreateController() => new(_parserService, _ollama);
+    private PdfParserController CreateController() => new(_parserService, _queue);
 
     // ── Export endpoint ───────────────────────────────────────────────────────
 
@@ -125,10 +123,10 @@ public class PdfParserControllerTests
     // ── Validate endpoint ─────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Validate_OllamaResponds_ReturnsReport()
+    public async Task Validate_EnqueuesTask_ReturnsAccepted()
     {
-        _ollama.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-               .Returns("All transactions match the source text.");
+        _queue.EnqueueAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+              .Returns(42);
 
         var controller = CreateController();
         var request = new ValidateRequest
@@ -140,28 +138,8 @@ public class PdfParserControllerTests
 
         var result = await controller.Validate(request, CancellationToken.None);
 
-        var ok = Assert.IsType<OkObjectResult>(result);
-        var json = JsonSerializer.Serialize(ok.Value);
-        Assert.Contains("All transactions match", json);
-    }
-
-    [Fact]
-    public async Task Validate_OllamaThrows_Returns500()
-    {
-        _ollama.GenerateAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-               .ThrowsAsync(new InvalidOperationException("Ollama not running"));
-
-        var controller = CreateController();
-        var request = new ValidateRequest
-        {
-            Transactions = [],
-            RawText = "raw text",
-            Model = "llama3.2"
-        };
-
-        var result = await controller.Validate(request, CancellationToken.None);
-
-        var statusResult = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(500, statusResult.StatusCode);
+        var accepted = Assert.IsType<AcceptedResult>(result);
+        var json = JsonSerializer.Serialize(accepted.Value);
+        Assert.Contains("42", json);
     }
 }
