@@ -76,8 +76,36 @@ function colColor(name: string) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+const PROFILES_KEY = "pdfBankProfiles";
+
+function loadProfilesFromStorage(): Record<string, ColumnLayout> {
+  try { return JSON.parse(localStorage.getItem(PROFILES_KEY) || "{}"); }
+  catch { return {}; }
+}
+
 export function PdfParser() {
   const [step, setStep] = useState(0);
+
+  // Bank profiles (localStorage)
+  const [profiles, setProfiles] = useState<Record<string, ColumnLayout>>(loadProfilesFromStorage);
+  const [saveProfileName, setSaveProfileName] = useState("");
+
+  const persistProfiles = (updated: Record<string, ColumnLayout>) => {
+    setProfiles(updated);
+    localStorage.setItem(PROFILES_KEY, JSON.stringify(updated));
+  };
+
+  const handleSaveProfile = () => {
+    const name = saveProfileName.trim();
+    if (!name || !layout) return;
+    persistProfiles({ ...profiles, [name]: layout });
+    setSaveProfileName("");
+  };
+
+  const handleDeleteProfile = (name: string) => {
+    const { [name]: _, ...rest } = profiles;
+    persistProfiles(rest);
+  };
 
   // Step 1 state
   const [files, setFiles] = useState<File[]>([]);
@@ -94,6 +122,13 @@ export function PdfParser() {
 
   // Step 4 state
   const [parsedFiles, setParsedFiles] = useState<ParsedFile[]>([]);
+
+  const handleLoadProfile = (name: string) => {
+    setLayout(profiles[name]);
+    setPreviewRows([]);
+    setParsedFiles([]);
+    setStep(2);
+  };
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [exportColumns, setExportColumns] = useState<string[]>([
@@ -236,6 +271,41 @@ export function PdfParser() {
           {step === 0 && (
             <div>
               <h5 className="mb-3"><i className="bi bi-upload me-2"></i>Upload PDF Files</h5>
+
+              {/* Saved profiles */}
+              {Object.keys(profiles).length > 0 && (
+                <div className="mb-4 p-3 border rounded bg-light">
+                  <div className="fw-semibold mb-2">
+                    <i className="bi bi-bookmark-fill me-2 text-primary"></i>Saved Bank Profiles
+                    <small className="text-muted fw-normal ms-2">Load a profile to skip column detection</small>
+                  </div>
+                  <div className="d-flex flex-wrap gap-2">
+                    {Object.keys(profiles).map((name) => (
+                      <div key={name} className="d-flex align-items-center gap-1">
+                        <button
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={() => handleLoadProfile(name)}
+                          disabled={files.length === 0}
+                          title={files.length === 0 ? "Upload a file first" : `Load profile: ${name}`}
+                        >
+                          <i className="bi bi-bookmark me-1"></i>{name}
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={() => handleDeleteProfile(name)}
+                          title="Delete profile"
+                        >
+                          <i className="bi bi-x"></i>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {files.length === 0 && (
+                    <small className="text-muted d-block mt-1">Upload a file above to enable profile loading.</small>
+                  )}
+                </div>
+              )}
+
               <div
                 className="border border-2 border-dashed rounded p-5 text-center mb-3"
                 style={{ borderColor: "#0d6efd", cursor: "pointer" }}
@@ -363,12 +433,27 @@ export function PdfParser() {
                         {layout.columns.map((col, i) => (
                           <tr key={i}>
                             <td>
-                              <span
-                                className="badge"
-                                style={{ background: colColor(col.name) }}
+                              <select
+                                className="form-select form-select-sm"
+                                value={col.name}
+                                style={{ minWidth: 120 }}
+                                onChange={(e) =>
+                                  setLayout((prev) =>
+                                    prev
+                                      ? {
+                                          ...prev,
+                                          columns: prev.columns.map((c, j) =>
+                                            j === i ? { ...c, name: e.target.value } : c,
+                                          ),
+                                        }
+                                      : prev,
+                                  )
+                                }
                               >
-                                {col.name}
-                              </span>
+                                {["Date", "Description", "Debit", "Credit", "Balance"].map((n) => (
+                                  <option key={n} value={n}>{n}</option>
+                                ))}
+                              </select>
                             </td>
                             <td>
                               <input
@@ -451,6 +536,30 @@ export function PdfParser() {
                     <button className="btn btn-sm btn-outline-primary" onClick={runDetectLayout}>
                       <i className="bi bi-arrow-clockwise me-1"></i>Re-detect
                     </button>
+                  </div>
+
+                  {/* Save as profile */}
+                  <div className="d-flex align-items-center gap-2 mt-2">
+                    <i className="bi bi-bookmark text-primary"></i>
+                    <input
+                      type="text"
+                      className="form-control form-control-sm"
+                      style={{ maxWidth: 180 }}
+                      placeholder="Profile name (e.g. ANZ)"
+                      value={saveProfileName}
+                      onChange={(e) => setSaveProfileName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSaveProfile()}
+                    />
+                    <button
+                      className="btn btn-sm btn-outline-success"
+                      onClick={handleSaveProfile}
+                      disabled={!saveProfileName.trim()}
+                    >
+                      Save Profile
+                    </button>
+                    {profiles[saveProfileName.trim()] && (
+                      <small className="text-warning"><i className="bi bi-exclamation-triangle me-1"></i>Will overwrite</small>
+                    )}
                   </div>
 
                   {layout.columns.length === 0 && (

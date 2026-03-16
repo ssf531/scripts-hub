@@ -9,6 +9,7 @@ export interface ColumnDef {
 export interface ColumnLayout {
   columns: ColumnDef[];
   pageWidth: number;
+  headerRowY?: number;
 }
 
 export interface BankTransaction {

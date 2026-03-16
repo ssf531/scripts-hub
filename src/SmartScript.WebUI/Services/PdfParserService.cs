@@ -9,7 +9,10 @@ namespace SmartScript.WebUI.Services;
 
 public record ColumnDef(string Name, double XMin, double XMax);
 
-public record ColumnLayout(List<ColumnDef> Columns, double PageWidth);
+// HeaderRowY: BoundingBox.Bottom of the detected transaction header row.
+// Lines above this Y (Bottom > HeaderRowY in PDF coords) are pre-header content
+// (cover page, account summaries) and should be skipped during parsing.
+public record ColumnLayout(List<ColumnDef> Columns, double PageWidth, double HeaderRowY = 0);
 
 public record BankTransaction(
     string Date,
@@ -73,6 +76,7 @@ public class PdfParserService
         new(@"^\d{1,2}-\d{1,2}-\d{2,4}$"),                  // dd-MM-yy or dd-MM-yyyy
         new(@"^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}$"),            // d MMM yyyy
         new(@"^[A-Za-z]{3}\s+\d{1,2},?\s+\d{4}$"),          // MMM dd, yyyy
+        new(@"^\d{1,2}\s+[A-Za-z]{3}$"),                     // d MMM  (day + month, no year — e.g. ANZ "10 Dec")
     ];
 
     private static readonly Regex AmountPattern = new(@"^-?[\d,]+(\.\d{1,2})?$");
@@ -86,24 +90,45 @@ public class PdfParserService
         var words = firstPage.GetWords().ToList();
         double pageWidth = firstPage.Width;
 
-        // Find header words — words whose text matches a known keyword
-        var headerHits = new List<(string ColumnName, double XCenter)>();
+        // Find header words — words whose text matches a known keyword, track Y position
+        var headerHits = new List<(string ColumnName, double XCenter, double YBottom)>();
         foreach (var word in words)
         {
             var text = word.Text.Trim().ToUpperInvariant();
             if (KeywordToColumn.TryGetValue(text, out var colName))
             {
                 double xCenter = word.BoundingBox.Left + word.BoundingBox.Width / 2.0;
-                headerHits.Add((colName, xCenter));
+                headerHits.Add((colName, xCenter, word.BoundingBox.Bottom));
             }
         }
 
         if (headerHits.Count == 0)
             return new ColumnLayout([], pageWidth);
 
-        // Deduplicate: if same column name appears multiple times, keep the first occurrence
+        // Group hits by Y row (within 5 pts), then pick the row with the most
+        // distinct column types — this selects the actual transaction header over
+        // summary/overview rows which typically only contain 1–2 keywords.
+        const double yLineTolerance = 5.0;
+        var lineGroups = new List<(double RepY, List<(string ColumnName, double XCenter)> Hits)>();
+
+        foreach (var (colName, xCenter, yBottom) in headerHits)
+        {
+            var existing = lineGroups.FirstOrDefault(g => Math.Abs(g.RepY - yBottom) <= yLineTolerance);
+            if (existing.Hits is null)
+                lineGroups.Add((yBottom, [(colName, xCenter)]));
+            else
+                existing.Hits.Add((colName, xCenter));
+        }
+
+        var bestGroup = lineGroups
+            .OrderByDescending(g => g.Hits.Select(h => h.ColumnName).Distinct().Count())
+            .First();
+        var bestHits = bestGroup.Hits;
+        double headerRowY = bestGroup.RepY;
+
+        // Deduplicate within the best row: keep first X occurrence of each column name
         var seen = new HashSet<string>();
-        var uniqueHits = headerHits
+        var uniqueHits = bestHits
             .Where(h => seen.Add(h.ColumnName))
             .OrderBy(h => h.XCenter)
             .ToList();
@@ -122,7 +147,7 @@ public class PdfParserService
             columns.Add(new ColumnDef(colName, xMin, xMax));
         }
 
-        return new ColumnLayout(columns, pageWidth);
+        return new ColumnLayout(columns, pageWidth, headerRowY);
     }
 
     // ── Phase 1b: Preview Layout (first 5 data rows) ─────────────────────────
@@ -134,10 +159,14 @@ public class PdfParserService
 
         foreach (var page in doc.GetPages())
         {
+            bool isFirstPage = page.Number == 1;
             var lines = GroupWordsIntoLines(page.GetWords().ToList());
             foreach (var line in lines)
             {
-                if (IsHeaderLine(line) || line.Count == 0) continue;
+                if (line.Count == 0) continue;
+                // Skip pre-header content only on page 1
+                if (isFirstPage && layout.HeaderRowY > 0 && line[0].BoundingBox.Bottom >= layout.HeaderRowY) continue;
+                if (IsHeaderLine(line)) continue;
 
                 var previewWords = line.Select(word =>
                 {
@@ -164,6 +193,7 @@ public class PdfParserService
 
         foreach (var page in doc.GetPages())
         {
+            bool isFirstPage = page.Number == 1;
             var words = page.GetWords().ToList();
 
             // Build raw text for Ollama validation
@@ -176,7 +206,11 @@ public class PdfParserService
             // Parse transactions
             foreach (var line in lines)
             {
-                if (IsHeaderLine(line) || line.Count == 0) continue;
+                if (line.Count == 0) continue;
+                // Skip pre-header content (summaries etc.) only on page 1 — continuation pages
+                // have their own header row but no leading summary sections
+                if (isFirstPage && layout.HeaderRowY > 0 && line[0].BoundingBox.Bottom >= layout.HeaderRowY) continue;
+                if (IsHeaderLine(line)) continue;
 
                 var tx = ParseLineToTransaction(line, layout, filename);
                 if (tx != null) transactions.Add(tx);
@@ -243,12 +277,21 @@ public class PdfParserService
         if (!buckets.TryGetValue("Date", out var dateParts) || dateParts.Count == 0)
             return null;
 
-        var dateStr = string.Join(" ", dateParts);
-        if (!IsDate(dateStr)) return null;
+        // Try progressively longer subsets to tolerate extra words (e.g. EP/BP codes) in the Date bucket
+        string? dateStr = null;
+        int dateWordCount = 0;
+        for (int len = 1; len <= dateParts.Count; len++)
+        {
+            var candidate = string.Join(" ", dateParts.Take(len));
+            if (IsDate(candidate)) { dateStr = candidate; dateWordCount = len; break; }
+        }
+        if (dateStr == null) return null;
 
+        // Extra words after the date (e.g. "EP", "BP", "DC") are transaction type codes — prepend to description
+        var extraDateWords = dateParts.Skip(dateWordCount).ToList();
         var description = buckets.TryGetValue("Description", out var descParts)
-            ? string.Join(" ", descParts)
-            : string.Empty;
+            ? string.Join(" ", extraDateWords.Concat(descParts))
+            : string.Join(" ", extraDateWords);
 
         var debit   = ParseAmount(buckets, "Debit");
         var credit  = ParseAmount(buckets, "Credit");
@@ -268,7 +311,16 @@ public class PdfParserService
         if (!buckets.TryGetValue(columnName, out var parts) || parts.Count == 0)
             return null;
 
-        var raw = string.Concat(parts).Replace(",", "");
-        return decimal.TryParse(raw, out var value) ? value : null;
+        // Try concatenation first (handles amounts split across words, e.g. "1,234" + ".56")
+        var raw = string.Concat(parts).Replace(",", "").Replace("$", "");
+        if (decimal.TryParse(raw, out var v)) return v;
+
+        // Fall back to first valid numeric part (handles description text bleeding into amount column)
+        foreach (var part in parts)
+        {
+            var partRaw = part.Replace(",", "").Replace("$", "");
+            if (decimal.TryParse(partRaw, out var value)) return value;
+        }
+        return null;
     }
 }
