@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect } from "react";
 import { Link } from "react-router-dom";
 import type { CsvRow, TransactionGroup, CategoryAssignment } from "../api/spending";
 import { groupCsvs, exportExcel, categorise, categoriseQueue } from "../api/spending";
-import { getAiTask, type AiTask } from "../api/aiTasks";
+import { getAiTask, getAiTasks, type AiTask } from "../api/aiTasks";
+import { getConfig } from "../api/config";
 
 // ── Step progress bar ─────────────────────────────────────────────────────────
 
@@ -97,6 +98,15 @@ export function SpendingAnalysis() {
   const [queueTaskId, setQueueTaskId] = useState<number | null>(null);
   const [queueTask, setQueueTask] = useState<AiTask | null>(null);
   const [pollIntervalRef] = useState<{ current: ReturnType<typeof setInterval> | null }>({ current: null });
+  const [completedTasks, setCompletedTasks] = useState<AiTask[]>([]);
+  const [loadingCompletedTasks, setLoadingCompletedTasks] = useState(false);
+  const [showCompletedTasks, setShowCompletedTasks] = useState(false);
+
+  // ── Fetch default Ollama model from config ─────────────────────────────────
+
+  useEffect(() => {
+    getConfig().then((cfg) => setOllamaModel(cfg.defaultModel)).catch(() => {});
+  }, []);
 
   // ── Preview CSV on file select ────────────────────────────────────────────
 
@@ -242,6 +252,38 @@ export function SpendingAnalysis() {
     };
   }, [pollIntervalRef]);
 
+  // ── Load completed categorisation tasks ──────────────────────────────────
+
+  const loadCompletedTasks = useCallback(async () => {
+    setLoadingCompletedTasks(true);
+    try {
+      const page = await getAiTasks({ type: "SpendingCategorisation", status: "Completed", pageSize: 10 });
+      setCompletedTasks(page.items);
+      setShowCompletedTasks(true);
+    } catch { /* ignore */ } finally {
+      setLoadingCompletedTasks(false);
+    }
+  }, []);
+
+  const loadCompletedTask = useCallback(async (id: number) => {
+    const task = await getAiTask(id);
+    setQueueTask(task);
+    setQueueTaskId(task.id);
+    // Parse and display results
+    if (task.output) {
+      try {
+        const jsonStart = task.output.indexOf('[');
+        const jsonEnd = task.output.lastIndexOf(']');
+        if (jsonStart >= 0 && jsonEnd >= 0) {
+          const cats = JSON.parse(task.output.slice(jsonStart, jsonEnd + 1)) as CategoryAssignment[];
+          setCategories(cats);
+        }
+      } catch { /* ignore */ }
+      setRawResponse(task.output);
+    }
+    setShowCompletedTasks(false);
+  }, []);
+
   // ── Category breakdown computation ───────────────────────────────────────
 
   const categoryBreakdown = (() => {
@@ -279,6 +321,8 @@ export function SpendingAnalysis() {
     setPreviewRows([]);
     setQueueTaskId(null);
     setQueueTask(null);
+    setCompletedTasks([]);
+    setShowCompletedTasks(false);
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
   };
 
@@ -615,7 +659,41 @@ export function SpendingAnalysis() {
                 >
                   <i className="bi bi-clock-history me-2"></i>Add to Queue
                 </button>
+                <button
+                  className="btn btn-outline-secondary"
+                  onClick={loadCompletedTasks}
+                  disabled={loadingCompletedTasks}
+                >
+                  {loadingCompletedTasks
+                    ? <><span className="spinner-border spinner-border-sm me-2"></span>Loading…</>
+                    : <><i className="bi bi-folder2-open me-2"></i>Load from Queue</>}
+                </button>
               </div>
+
+              {showCompletedTasks && (
+                <div className="card mb-3 border-secondary">
+                  <div className="card-header d-flex justify-content-between align-items-center py-2">
+                    <span className="fw-semibold small">Recent completed categorisations</span>
+                    <button className="btn-close btn-sm" onClick={() => setShowCompletedTasks(false)} />
+                  </div>
+                  {completedTasks.length === 0 ? (
+                    <div className="card-body py-2 text-muted small">No completed categorisation tasks found.</div>
+                  ) : (
+                    <ul className="list-group list-group-flush">
+                      {completedTasks.map((t) => (
+                        <li key={t.id} className="list-group-item list-group-item-action py-2 d-flex justify-content-between align-items-center"
+                          style={{ cursor: "pointer" }} onClick={() => loadCompletedTask(t.id)}>
+                          <span>
+                            <span className="badge bg-success me-2">#{t.id}</span>
+                            <span className="small">{t.description}</span>
+                          </span>
+                          <small className="text-muted">{new Date(t.completedAt!).toLocaleString()}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
 
               {catError && (
                 <div className="alert alert-danger">
