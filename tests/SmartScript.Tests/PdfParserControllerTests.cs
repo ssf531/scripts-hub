@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
+using SmartScript.Core.Services;
 using SmartScript.WebUI.Controllers;
 using SmartScript.WebUI.Services;
 using Xunit;
@@ -11,9 +12,10 @@ namespace SmartScript.Tests;
 public class PdfParserControllerTests
 {
     private readonly IAiTaskQueue _queue = Substitute.For<IAiTaskQueue>();
+    private readonly IOllamaClient _ollama = Substitute.For<IOllamaClient>();
     private readonly PdfParserService _parserService = new();
 
-    private PdfParserController CreateController() => new(_parserService, _queue);
+    private PdfParserController CreateController() => new(_parserService, _queue, _ollama);
 
     // ── Export endpoint ───────────────────────────────────────────────────────
 

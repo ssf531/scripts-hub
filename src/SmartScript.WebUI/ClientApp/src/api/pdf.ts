@@ -42,6 +42,10 @@ export interface ValidationResult {
   taskId: number;
 }
 
+export interface ValidationSyncResult {
+  report: string;
+}
+
 // API functions
 
 export async function detectLayout(file: File): Promise<ColumnLayout> {
@@ -81,6 +85,20 @@ export async function validateTransactions(
     body: JSON.stringify({ transactions, rawText, model }),
   });
   if (!res.ok) throw new Error(`validate failed: ${await res.text()}`);
+  return res.json();
+}
+
+export async function validateTransactionsSync(
+  transactions: BankTransaction[],
+  rawText: string,
+  model: string,
+): Promise<ValidationSyncResult> {
+  const res = await fetch("/api/pdf-parser/validate-sync", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ transactions, rawText, model }),
+  });
+  if (!res.ok) throw new Error(`validate-sync failed: ${await res.text()}`);
   return res.json();
 }
 

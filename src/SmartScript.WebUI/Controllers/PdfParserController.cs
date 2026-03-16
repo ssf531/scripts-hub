@@ -7,7 +7,7 @@ namespace SmartScript.WebUI.Controllers;
 
 [ApiController]
 [Route("api/pdf-parser")]
-public class PdfParserController(PdfParserService parserService, IAiTaskQueue aiTaskQueue) : ControllerBase
+public class PdfParserController(PdfParserService parserService, IAiTaskQueue aiTaskQueue, SmartScript.Core.Services.IOllamaClient ollamaClient) : ControllerBase
 {
     // POST /api/pdf-parser/detect-layout
     // Analyses the first uploaded PDF and returns detected column layout.
@@ -113,6 +113,40 @@ public class PdfParserController(PdfParserService parserService, IAiTaskQueue ai
             ct:          ct);
 
         return Accepted(new { taskId });
+    }
+
+    // POST /api/pdf-parser/validate-sync
+    // Synchronously validates transactions using Ollama (blocks until complete).
+    [HttpPost("validate-sync")]
+    public async Task<IActionResult> ValidateSync([FromBody] ValidateRequest request, CancellationToken ct)
+    {
+        var rawTextExcerpt = request.RawText.Length > 3000
+            ? request.RawText[..3000]
+            : request.RawText;
+
+        var transactionsJson = JsonSerializer.Serialize(request.Transactions,
+            new JsonSerializerOptions { WriteIndented = true });
+
+        var prompt = $"""
+            You are a bank statement auditor. Raw PDF text and parsed transactions are below.
+            Verify each parsed transaction accurately matches the source. Report discrepancies concisely.
+
+            RAW TEXT (excerpt):
+            {rawTextExcerpt}
+
+            PARSED TRANSACTIONS (JSON):
+            {transactionsJson}
+            """;
+
+        try
+        {
+            var report = await ollamaClient.GenerateAsync(prompt, request.Model ?? "llama3.2", ct);
+            return Ok(new { report });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
     }
 
     // POST /api/pdf-parser/export

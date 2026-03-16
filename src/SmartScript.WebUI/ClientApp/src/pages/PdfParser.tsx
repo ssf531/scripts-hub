@@ -11,6 +11,7 @@ import {
   previewLayout,
   parsePdfs,
   validateTransactions,
+  validateTransactionsSync,
   exportCsv,
 } from "../api/pdf";
 import { getAiTask } from "../api/aiTasks";
@@ -255,6 +256,35 @@ export function PdfParser() {
       setValidating(false);
     }
   }, [parsedFiles, selectedFileIdx, ollamaModel, pollTask]);
+
+  const runValidateSync = useCallback(async () => {
+    if (parsedFiles.length === 0) return;
+    const target = parsedFiles[selectedFileIdx];
+    setValidating(true);
+    setValidateError(null);
+    setValidationTask(null);
+    setValidationTaskId(null);
+    stopPolling();
+    try {
+      const result = await validateTransactionsSync(target.transactions, target.rawText, ollamaModel);
+      setValidationTask({
+        id: 0,
+        type: "PdfValidation",
+        description: `Validate ${target.transactions.length} transaction(s)`,
+        model: ollamaModel,
+        status: "Completed",
+        output: result.report,
+        errorMessage: null,
+        createdAt: new Date().toISOString(),
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+      } as AiTask);
+    } catch (e: unknown) {
+      setValidateError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setValidating(false);
+    }
+  }, [parsedFiles, selectedFileIdx, ollamaModel]);
 
   // ── Export CSV ────────────────────────────────────────────────────────────
 
@@ -867,17 +897,26 @@ export function PdfParser() {
                 </div>
               </div>
 
-              <button
-                className="btn btn-primary mb-3"
-                disabled={validating || parsedFiles.length === 0}
-                onClick={runValidate}
-              >
-                {validating ? (
-                  <><span className="spinner-border spinner-border-sm me-2"></span>Waiting for result…</>
-                ) : (
-                  <><i className="bi bi-shield-check me-2"></i>Run Validation</>
-                )}
-              </button>
+              <div className="d-flex gap-2 mb-3">
+                <button
+                  className="btn btn-primary"
+                  disabled={validating || parsedFiles.length === 0}
+                  onClick={runValidateSync}
+                >
+                  {validating ? (
+                    <><span className="spinner-border spinner-border-sm me-2"></span>Validating…</>
+                  ) : (
+                    <><i className="bi bi-shield-check me-2"></i>Validate Now</>
+                  )}
+                </button>
+                <button
+                  className="btn btn-outline-primary"
+                  disabled={validationTaskId !== null || parsedFiles.length === 0}
+                  onClick={runValidate}
+                >
+                  <i className="bi bi-clock-history me-2"></i>Add to Queue
+                </button>
+              </div>
 
               {validateError && (
                 <div className="alert alert-danger">

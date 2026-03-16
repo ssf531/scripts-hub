@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect } from "react";
+import { Link } from "react-router-dom";
 import type { CsvRow, TransactionGroup, CategoryAssignment } from "../api/spending";
-import { groupCsvs, exportExcel, categorise } from "../api/spending";
+import { groupCsvs, exportExcel, categorise, categoriseQueue } from "../api/spending";
+import { getAiTask, type AiTask } from "../api/aiTasks";
 
 // ── Step progress bar ─────────────────────────────────────────────────────────
 
@@ -90,6 +92,11 @@ export function SpendingAnalysis() {
   const [categories, setCategories] = useState<CategoryAssignment[]>([]);
   const [rawResponse, setRawResponse] = useState("");
   const [catError, setCatError] = useState<string | null>(null);
+
+  // Queue-based categorisation state
+  const [queueTaskId, setQueueTaskId] = useState<number | null>(null);
+  const [queueTask, setQueueTask] = useState<AiTask | null>(null);
+  const [pollIntervalRef] = useState<{ current: ReturnType<typeof setInterval> | null }>({ current: null });
 
   // ── Preview CSV on file select ────────────────────────────────────────────
 
@@ -190,6 +197,51 @@ export function SpendingAnalysis() {
     }
   }, [groups, ollamaModel]);
 
+  const addCategoriseToQueue = useCallback(async () => {
+    setCatError(null);
+    setCategories([]);
+    setRawResponse("");
+    try {
+      const result = await categoriseQueue(groups, ollamaModel);
+      setQueueTaskId(result.taskId);
+      setQueueTask({ id: result.taskId, status: "Pending" } as AiTask);
+
+      // Start polling for task status
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = setInterval(async () => {
+        try {
+          const task = await getAiTask(result.taskId);
+          setQueueTask(task);
+
+          if (task.status === "Completed" && task.output) {
+            try {
+              const jsonStart = task.output.indexOf('[');
+              const jsonEnd = task.output.lastIndexOf(']');
+              if (jsonStart >= 0 && jsonEnd >= 0) {
+                const jsonSlice = task.output.slice(jsonStart, jsonEnd + 1);
+                const cats = JSON.parse(jsonSlice) as CategoryAssignment[];
+                setCategories(cats);
+              }
+            } catch {}
+            setRawResponse(task.output);
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          } else if (task.status === "Failed") {
+            setCatError(task.errorMessage || "Task failed");
+            if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          }
+        } catch {}
+      }, 2000);
+    } catch (e: unknown) {
+      setCatError(e instanceof Error ? e.message : String(e));
+    }
+  }, [groups, ollamaModel, pollIntervalRef]);
+
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, [pollIntervalRef]);
+
   // ── Category breakdown computation ───────────────────────────────────────
 
   const categoryBreakdown = (() => {
@@ -225,6 +277,9 @@ export function SpendingAnalysis() {
     setCatError(null);
     setGroupError(null);
     setPreviewRows([]);
+    setQueueTaskId(null);
+    setQueueTask(null);
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -537,27 +592,72 @@ export function SpendingAnalysis() {
                 </div>
               </div>
 
-              <button
-                className="btn btn-success mb-4"
-                disabled={categorising || groups.length === 0}
-                onClick={runCategorise}
-              >
-                {categorising ? (
-                  <>
-                    <span className="spinner-border spinner-border-sm me-2"></span>Analysing…
-                  </>
-                ) : (
-                  <>
-                    <i className="bi bi-robot me-2"></i>Analyse Spending
-                  </>
-                )}
-              </button>
+              <div className="d-flex gap-2 mb-4">
+                <button
+                  className="btn btn-success"
+                  disabled={categorising || groups.length === 0}
+                  onClick={runCategorise}
+                >
+                  {categorising ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2"></span>Analysing…
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-robot me-2"></i>Analyse Spending
+                    </>
+                  )}
+                </button>
+                <button
+                  className="btn btn-outline-success"
+                  disabled={queueTaskId !== null || groups.length === 0}
+                  onClick={addCategoriseToQueue}
+                >
+                  <i className="bi bi-clock-history me-2"></i>Add to Queue
+                </button>
+              </div>
 
               {catError && (
                 <div className="alert alert-danger">
                   <i className="bi bi-exclamation-triangle me-2"></i>{catError}
                   <div className="mt-1 small text-muted">
                     Ensure Ollama is running and model is pulled (ollama pull {ollamaModel}).
+                  </div>
+                </div>
+              )}
+
+              {queueTask && (
+                <div className="alert alert-info mb-4">
+                  <div className="d-flex align-items-center justify-content-between">
+                    <div>
+                      <i className="bi bi-info-circle me-2"></i>
+                      Task #{queueTask.id}:{" "}
+                      <strong>
+                        {queueTask.status === "Pending" && (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2"></span>Queued
+                          </>
+                        )}
+                        {queueTask.status === "Running" && (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2"></span>Running
+                          </>
+                        )}
+                        {queueTask.status === "Completed" && (
+                          <>
+                            <i className="bi bi-check-circle me-2 text-success"></i>Completed
+                          </>
+                        )}
+                        {queueTask.status === "Failed" && (
+                          <>
+                            <i className="bi bi-x-circle me-2 text-danger"></i>Failed
+                          </>
+                        )}
+                      </strong>
+                    </div>
+                    <Link to="/ai-queue" className="btn btn-sm btn-outline-info">
+                      View in Queue
+                    </Link>
                   </div>
                 </div>
               )}

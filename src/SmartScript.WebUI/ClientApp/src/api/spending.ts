@@ -79,6 +79,19 @@ export async function categorise(
   return res.json();
 }
 
+export async function categoriseQueue(
+  groups: TransactionGroup[],
+  model: string,
+): Promise<{ taskId: number }> {
+  const res = await fetch("/api/spending-analysis/categorise-queue", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ groups, model }),
+  });
+  if (!res.ok) throw new Error(`categoriseQueue failed: ${await res.text()}`);
+  return res.json();
+}
+
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

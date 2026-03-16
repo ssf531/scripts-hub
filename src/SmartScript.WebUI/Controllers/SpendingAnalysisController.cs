@@ -8,7 +8,7 @@ namespace SmartScript.WebUI.Controllers;
 
 [ApiController]
 [Route("api/spending-analysis")]
-public class SpendingAnalysisController(SpendingAnalysisService analysisService, IOllamaClient ollamaClient) : ControllerBase
+public class SpendingAnalysisController(SpendingAnalysisService analysisService, IOllamaClient ollamaClient, IAiTaskQueue aiTaskQueue) : ControllerBase
 {
     // POST /api/spending-analysis/group
     // Accepts CSV files and returns grouped transaction summary.
@@ -100,6 +100,37 @@ public class SpendingAnalysisController(SpendingAnalysisService analysisService,
         {
             return Ok(new { categories = Array.Empty<object>(), rawResponse = raw });
         }
+    }
+
+    // POST /api/spending-analysis/categorise-queue
+    // Enqueue categorisation task instead of blocking.
+    [HttpPost("categorise-queue")]
+    public async Task<IActionResult> CategoriseQueue([FromBody] CategoriseRequest request, CancellationToken ct)
+    {
+        if (request.Groups == null || request.Groups.Count == 0)
+            return BadRequest("No groups to categorise.");
+
+        var groupsJson = System.Text.Json.JsonSerializer.Serialize(
+            request.Groups.Select(g => new { group = g.DisplayName, totalDebit = g.TotalDebit, count = g.Count }),
+            new JsonSerializerOptions { WriteIndented = true });
+
+        var prompt = $$"""
+            You are a personal finance analyst. Below is a list of spending groups from a bank statement.
+            For each group, assign ONE category from: Food & Dining, Transport, Shopping, Bills & Utilities, Healthcare, Entertainment, Savings & Transfers, Other.
+            Return ONLY a JSON array with no extra text: [{"group":"<name>","category":"<cat>","confidence":"high|medium|low"}]
+
+            GROUPS:
+            {{groupsJson}}
+            """;
+
+        var taskId = await aiTaskQueue.EnqueueAsync(
+            type:        "SpendingCategorisation",
+            description: $"Categorise {request.Groups.Count} spending group(s)",
+            prompt:      prompt,
+            model:       request.Model ?? "llama3.2",
+            ct:          ct);
+
+        return Accepted(new { taskId });
     }
 }
 
