@@ -12,7 +12,7 @@
       "Bash(npm run test *)",
       "Bash(find *)",
       "Bash(dotnet add:*)",
-      "Bash(dir /b )",
+      "Bash(dir * )",
       "Bash(git fetch:*)",
       "Bash(git pull:*)",
       "Bash(git add:*)",
