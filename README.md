@@ -42,9 +42,39 @@ The project is divided into several decoupled components to ensure maximum exten
 3.  **Sequential Processing**: Items in the queue are processed one-by-one with per-item progress logging.
 4.  **Configurable**: Thread count, output format (mp4/mkv/ts), save directory, and extra CLI arguments are all adjustable. Default values are read from `appsettings.json` under the `M3u8Downloader` section.
 
+### PDF Bank Statement Parser
+
+1.  **Multi-File Upload**: Drag & drop or select multiple PDF bank statements for batch processing.
+2.  **Layout Detection**: AI-powered column detection automatically identifies Date, Description, Debit, Credit columns.
+3.  **Transaction Parsing**: Converts PDFs to structured transaction tables with preview & export to CSV.
+4.  **AI Validation**: Optional Ollama-based validation compares raw PDF text against parsed transactions, reporting discrepancies.
+5.  **Queue or Sync**: Run validation synchronously for immediate results, or enqueue for batch processing via the AI Task Queue.
+6.  **Load Past Results**: Retrieve previously validated transactions from the queue without re-uploading.
+
+### Spending Analysis
+
+1.  **CSV Import**: Upload bank statements (CSV) exported from PDF Parser or any bank statement format.
+2.  **Grouping & Totaling**: Aggregate transactions by merchant/description, calculate totals and running balances.
+3.  **Excel Export**: Download structured Excel workbook with transaction details and per-group summaries.
+4.  **AI Categorization**: Use Ollama to automatically classify spending groups into standard categories (Food & Dining, Transport, Shopping, Bills & Utilities, Healthcare, Entertainment, Savings & Transfers, Other).
+5.  **Queue or Sync**: Run analysis synchronously or enqueue for batch processing.
+6.  **Load Past Results**: Retrieve previously categorized analyses from the queue to view results without CSV data.
+
   ***
 
-## 4. Docker Deployment & Local File Synchronization
+## 4. AI Task Queue
+
+The **AI Task Queue** provides asynchronous processing for long-running AI operations:
+
+- **Dual Execution Modes**: Both PDF Parser and Spending Analysis offer sync (immediate, blocks UI) and async (enqueue, poll) execution paths.
+- **Task Management**: View all queued, running, completed, and failed AI tasks in a unified dashboard.
+- **Status Polling**: Real-time status updates with automatic result display once complete.
+- **Result Storage**: Completed task outputs are persisted in SQLite for later retrieval.
+- **Load from Queue**: Both PDF Parser and Spending Analysis can reload past completed tasks to view results without re-running.
+
+  ***
+
+## 5. Docker Deployment & Local File Synchronization
 
 The platform leverages **Docker Bind Mounts** to allow scripts to interact directly with your host machine's file system.
 
@@ -78,25 +108,53 @@ services:
 
 ```
 
+### Configuration
+
+Key settings in `appsettings.json` / `appsettings.Development.json`:
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `Ollama:BaseUrl` | `http://localhost:11434` | Ollama API endpoint. Override with `OLLAMA_BASE_URL` environment variable. |
+| `Ollama:DefaultModel` | `llama3.2` | Default model used in PDF Parser and Spending Analysis if not overridden by user. |
+| `PluginDirectory` | `./plugins` (dev) / `/app/plugins` (docker) | Where script `.dll` plugins are loaded from. |
+| `ConnectionStrings:DefaultConnection` | `smartscript.db` (dev) / `/app/config/smartscript.db` (docker) | SQLite database path. Auto-created on startup. |
+
 ---
 
-## 5. UI Design
+## 6. UI Design
 
-- **Script Dashboard**: Card-based React view of all scripts with "Start/Stop" controls and success rate metrics.
+- **Script Dashboard** (`/`): Card-based React view of all scripts with "Start/Stop" controls and success rate metrics.
 
 - **Dynamic Settings**: An adaptive form engine that auto-renders inputs (`text`, `number`, `toggle`, `slider`, `textarea`) based on each script's metadata — no frontend changes needed to add new settings.
 
-- **Per-Script UI Pages**: Each script has its own dedicated page component. The M3U8 Downloader shows a Download Queue card + Diagnostics card + Settings card; the Email Cleaner shows Settings + Ollama/Gmail diagnostics side by side. Generic scripts fall back to a standard settings layout.
+- **Per-Script UI Pages**: Each script has its own dedicated page component with a multi-step wizard:
+  - **PDF Parser** (`/pdf-parser`): 5-step wizard for uploading PDFs, detecting layout, previewing transactions, and validating with AI.
+  - **Spending Analysis** (`/spending-analysis`): 4-step wizard for importing CSVs, grouping transactions, exporting Excel, and categorizing with AI.
+  - **M3U8 Downloader** (`/m3u8-downloader`): Download Queue card + Diagnostics card + Settings card.
+  - **Email Cleaner** (`/email-cleaner`): Settings + Ollama/Gmail diagnostics side by side.
+
+- **AI Task Queue** (`/ai-queue`): Unified dashboard for viewing, filtering, and managing all queued, running, completed, and failed AI tasks. Click any task to view the full prompt and output.
 
 - **Real-time Logs**: Integrated **SignalR** console for viewing live script output. Dark terminal-style display with color-coded log levels.
 
-- **Client-Side Routing**: React Router handles navigation between Dashboard (`/`), Script Detail (`/script/:name`), History (`/history`), and Settings (`/settings`).
+- **Client-Side Routing**: React Router handles navigation between:
+  - Dashboard (`/`)
+  - Script Detail (`/script/:name`)
+  - PDF Parser (`/pdf-parser`)
+  - Spending Analysis (`/spending-analysis`)
+  - M3U8 Downloader (`/m3u8-downloader`)
+  - Email Cleaner (`/email-cleaner`)
+  - AI Queue (`/ai-queue`)
+  - History (`/history`)
+  - Settings (`/settings`)
 
 - **Diagnostics**: Per-script connection testing — M3U8 Downloader verifies N_m3u8DL-RE is installed; Email Cleaner tests Ollama connectivity and Gmail OAuth credentials.
 
+- **Load from Queue**: PDF Parser and Spending Analysis both feature "Load from Queue" buttons to retrieve and display previously completed AI analysis results without re-running.
+
   ***
 
-## 6. Important Considerations & Precautions
+## 7. Important Considerations & Precautions
 
 > [!IMPORTANT]
 > **Privacy & Security**
@@ -113,7 +171,7 @@ services:
 
 ---
 
-## 7. Development Roadmap
+## 8. Development Roadmap
 
 - **Phase 1** ✅: Core interface definitions, Docker multi-stage build setup, and Gmail OAuth integration.
 
@@ -122,5 +180,13 @@ services:
 - **Phase 3** ✅: Quartz.NET task scheduling and hot-loading support for `.dll` plugins.
 
 - **Phase 4** ✅: M3U8 Video Downloader plugin with download queue, per-script UI pages, and `Textarea` setting type.
+
+- **Phase 5** ✅: PDF Bank Statement Parser with AI layout detection, transaction parsing, and Ollama validation.
+
+- **Phase 6** ✅: Spending Analysis tool with CSV import, transaction grouping, Excel export, and AI categorization.
+
+- **Phase 7** ✅: AI Task Queue with async processing, status polling, result persistence, and "Load from Queue" functionality in PDF Parser and Spending Analysis. Default Ollama model configured via `appsettings.json`.
+
+- **Phase 8** 🔄: *Future phases* — Custom webhook triggers, workflow automation, advanced scheduling, multi-tenant support.
 
   ***
