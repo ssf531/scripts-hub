@@ -17,6 +17,6 @@ services:
       - "host.docker.internal:host-gateway" # Required on Linux for host access
     environment:
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
-      # - Ollama__DefaultModel=llama3.2
-      # - CredentialPath=/app/config
+      - Ollama__DefaultModel=llama3.2
+      - CredentialPath=/app/config
     restart: unless-stopped
