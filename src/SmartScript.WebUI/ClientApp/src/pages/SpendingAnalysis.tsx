@@ -282,6 +282,7 @@ export function SpendingAnalysis() {
       setRawResponse(task.output);
     }
     setShowCompletedTasks(false);
+    setStep(3);
   }, []);
 
   // ── Category breakdown computation ───────────────────────────────────────
@@ -441,6 +442,44 @@ export function SpendingAnalysis() {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              )}
+
+              {/* ── Or load a past result from queue ──────────────────── */}
+              <div className="text-center text-muted my-3 small">— or —</div>
+              <div className="d-flex justify-content-center mb-2">
+                <button
+                  className="btn btn-outline-secondary"
+                  onClick={loadCompletedTasks}
+                  disabled={loadingCompletedTasks}
+                >
+                  {loadingCompletedTasks
+                    ? <><span className="spinner-border spinner-border-sm me-2"></span>Loading…</>
+                    : <><i className="bi bi-folder2-open me-2"></i>Load Past Analysis from Queue</>}
+                </button>
+              </div>
+              {showCompletedTasks && (
+                <div className="card mb-3 border-secondary">
+                  <div className="card-header d-flex justify-content-between align-items-center py-2">
+                    <span className="fw-semibold small">Recent completed categorisations</span>
+                    <button className="btn-close btn-sm" onClick={() => setShowCompletedTasks(false)} />
+                  </div>
+                  {completedTasks.length === 0 ? (
+                    <div className="card-body py-2 text-muted small">No completed categorisation tasks found.</div>
+                  ) : (
+                    <ul className="list-group list-group-flush">
+                      {completedTasks.map((t) => (
+                        <li key={t.id} className="list-group-item list-group-item-action py-2 d-flex justify-content-between align-items-center"
+                          style={{ cursor: "pointer" }} onClick={() => loadCompletedTask(t.id)}>
+                          <span>
+                            <span className="badge bg-success me-2">#{t.id}</span>
+                            <span className="small">{t.description}</span>
+                          </span>
+                          <small className="text-muted">{new Date(t.completedAt!).toLocaleString()}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 
@@ -659,41 +698,7 @@ export function SpendingAnalysis() {
                 >
                   <i className="bi bi-clock-history me-2"></i>Add to Queue
                 </button>
-                <button
-                  className="btn btn-outline-secondary"
-                  onClick={loadCompletedTasks}
-                  disabled={loadingCompletedTasks}
-                >
-                  {loadingCompletedTasks
-                    ? <><span className="spinner-border spinner-border-sm me-2"></span>Loading…</>
-                    : <><i className="bi bi-folder2-open me-2"></i>Load from Queue</>}
-                </button>
               </div>
-
-              {showCompletedTasks && (
-                <div className="card mb-3 border-secondary">
-                  <div className="card-header d-flex justify-content-between align-items-center py-2">
-                    <span className="fw-semibold small">Recent completed categorisations</span>
-                    <button className="btn-close btn-sm" onClick={() => setShowCompletedTasks(false)} />
-                  </div>
-                  {completedTasks.length === 0 ? (
-                    <div className="card-body py-2 text-muted small">No completed categorisation tasks found.</div>
-                  ) : (
-                    <ul className="list-group list-group-flush">
-                      {completedTasks.map((t) => (
-                        <li key={t.id} className="list-group-item list-group-item-action py-2 d-flex justify-content-between align-items-center"
-                          style={{ cursor: "pointer" }} onClick={() => loadCompletedTask(t.id)}>
-                          <span>
-                            <span className="badge bg-success me-2">#{t.id}</span>
-                            <span className="small">{t.description}</span>
-                          </span>
-                          <small className="text-muted">{new Date(t.completedAt!).toLocaleString()}</small>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
 
               {catError && (
                 <div className="alert alert-danger">
