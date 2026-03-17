@@ -292,9 +292,8 @@ export function SpendingAnalysis() {
     const catMap: Record<string, { total: number; topGroups: string[] }> = {};
     categories.forEach(({ group, category }) => {
       const grp = groups.find((g) => g.displayName === group);
-      if (!grp) return;
       if (!catMap[category]) catMap[category] = { total: 0, topGroups: [] };
-      catMap[category].total += grp.totalDebit;
+      if (grp) catMap[category].total += grp.totalDebit;
       catMap[category].topGroups.push(group);
     });
     const totalSpend = Object.values(catMap).reduce((s, c) => s + c.total, 0);
@@ -307,6 +306,7 @@ export function SpendingAnalysis() {
       }))
       .sort((a, b) => b.total - a.total);
   })();
+  const hasSpendTotals = categoryBreakdown.some((r) => r.total > 0);
 
   // ── Reset ─────────────────────────────────────────────────────────────────
 
@@ -754,13 +754,19 @@ export function SpendingAnalysis() {
                   )}
 
                   {/* Category breakdown table + bars */}
+                  {!hasSpendTotals && (
+                    <div className="alert alert-info py-2 small mb-3">
+                      <i className="bi bi-info-circle me-2"></i>
+                      Loaded from queue — spend totals not available without the original CSV data.
+                    </div>
+                  )}
                   <div className="table-responsive mb-3">
                     <table className="table table-sm align-middle">
                       <thead className="table-light">
                         <tr>
                           <th>Category</th>
-                          <th className="text-end">Total Spend</th>
-                          <th>Share</th>
+                          {hasSpendTotals && <th className="text-end">Total Spend</th>}
+                          {hasSpendTotals && <th>Share</th>}
                           <th>Top Groups</th>
                         </tr>
                       </thead>
@@ -775,21 +781,25 @@ export function SpendingAnalysis() {
                                 {row.category}
                               </span>
                             </td>
-                            <td className="text-end fw-semibold">{row.total.toFixed(2)}</td>
-                            <td style={{ minWidth: 200 }}>
-                              <div className="d-flex align-items-center gap-2">
-                                <div className="progress flex-grow-1" style={{ height: 12 }}>
-                                  <div
-                                    className="progress-bar"
-                                    style={{
-                                      width: `${row.pct}%`,
-                                      background: catColor(row.category),
-                                    }}
-                                  />
+                            {hasSpendTotals && (
+                              <td className="text-end fw-semibold">{row.total.toFixed(2)}</td>
+                            )}
+                            {hasSpendTotals && (
+                              <td style={{ minWidth: 200 }}>
+                                <div className="d-flex align-items-center gap-2">
+                                  <div className="progress flex-grow-1" style={{ height: 12 }}>
+                                    <div
+                                      className="progress-bar"
+                                      style={{
+                                        width: `${row.pct}%`,
+                                        background: catColor(row.category),
+                                      }}
+                                    />
+                                  </div>
+                                  <small className="text-muted">{row.pct.toFixed(1)}%</small>
                                 </div>
-                                <small className="text-muted">{row.pct.toFixed(1)}%</small>
-                              </div>
-                            </td>
+                              </td>
+                            )}
                             <td className="small text-muted">{row.topGroups.join(", ")}</td>
                           </tr>
                         ))}
