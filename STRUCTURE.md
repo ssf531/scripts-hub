@@ -76,9 +76,13 @@ SmartScript.WebUI/
 ├── Program.cs                  # DI registration, EF Core, SignalR, Quartz, hosted services
 ├── appsettings.json            # Connection string, Ollama URL, plugin directory
 ├── Controllers/
-│   ├── ScriptsController.cs    # REST API: list/get/run/stop scripts, save settings
-│   ├── DiagnosticsController.cs # REST API: test Ollama & email connections
-│   └── ConfigController.cs     # REST API: global config (Ollama URL, plugin dir)
+│   ├── ScriptsController.cs        # REST API: list/get/run/stop scripts, save settings
+│   ├── DiagnosticsController.cs    # REST API: test Ollama & email connections
+│   ├── ConfigController.cs         # REST API: global config (Ollama URL, default model)
+│   ├── PdfParserController.cs      # REST API: layout detection, transaction parsing, validation (sync/queue)
+│   ├── SpendingAnalysisController.cs # REST API: CSV import, grouping, categorisation (sync/queue)
+│   ├── M3u8DownloaderController.cs # REST API: queue management, downloads, diagnostics
+│   └── AiTaskController.cs         # REST API: list/get/delete AI tasks, enqueue new tasks
 ├── ClientApp/                  # React + TypeScript + Vite SPA
 │   ├── package.json            # Frontend dependencies (react, signalr, bootstrap)
 │   ├── vite.config.ts          # Vite config with API/SignalR proxy
@@ -90,19 +94,26 @@ SmartScript.WebUI/
 │       ├── vite-env.d.ts       # CSS module type declarations
 │       ├── types/index.ts      # TypeScript interfaces (ScriptInfo, LogEntry, etc.)
 │       ├── api/
-│       │   ├── client.ts       # Fetch wrapper (base URL, error handling)
-│       │   ├── scripts.ts      # Script API functions
-│       │   ├── diagnostics.ts  # Diagnostics API functions
-│       │   └── config.ts       # Config API functions
+│       │   ├── client.ts           # Fetch wrapper (base URL, error handling)
+│       │   ├── scripts.ts          # Script API functions (list, get, run, stop)
+│       │   ├── diagnostics.ts      # Diagnostics API functions
+│       │   ├── config.ts           # Config API functions (get global config including default model)
+│       │   ├── pdf.ts              # PDF Parser API (layout detection, parsing, validation sync/queue)
+│       │   ├── spending.ts         # Spending Analysis API (CSV import, grouping, categorisation)
+│       │   ├── m3u8.ts             # M3U8 Downloader API (queue, progress, downloads)
+│       │   └── aiTasks.ts          # AI Task Queue API (list, get, delete, enqueue tasks)
 │       ├── hooks/
 │       │   └── useLogHub.ts    # SignalR hook: connect, filter by script, auto-reconnect
 │       ├── pages/
-│       │   ├── Dashboard.tsx   # Card grid, Start/Stop, state badges, success rates
-│       │   ├── ScriptDetail.tsx # Dynamic form engine + diagnostics + Run/Stop button
-│       │   ├── History.tsx     # Script run history log
-│       │   ├── PdfParser.tsx   # PDF bank statement parser wizard
-│       │   ├── SpendingAnalysis.tsx # Spending grouping, Excel export, AI categorisation
-│       │   └── Settings.tsx    # Global config display (Ollama URL, plugin dir, OAuth info)
+│       │   ├── Dashboard.tsx       # Card grid, Start/Stop, state badges, success rates
+│       │   ├── ScriptDetail.tsx    # Dynamic form engine + diagnostics + Run/Stop button
+│       │   ├── History.tsx         # Script run history log
+│       │   ├── PdfParser.tsx       # 5-step PDF bank statement parser wizard with AI validation + Load from Queue
+│       │   ├── SpendingAnalysis.tsx # 4-step spending grouping, Excel export, AI categorisation + Load from Queue
+│       │   ├── M3u8Downloader.tsx  # Download queue, progress tracking, settings, diagnostics
+│       │   ├── AiQueue.tsx         # AI task queue dashboard with filtering and task details
+│       │   ├── EmailCleaner.tsx    # Email cleaner settings and Gmail diagnostics
+│       │   └── Settings.tsx        # Global config display (Ollama URL, default model, plugin dir, OAuth info)
 │       └── components/
 │           ├── LogConsole.tsx   # Global collapsible bottom log panel (all scripts, shared)
 │           ├── ScriptCard.tsx   # Individual script card with state badge + progress bar
@@ -111,15 +122,17 @@ SmartScript.WebUI/
 │   ├── AppDbContext.cs         # EF Core DbContext (SQLite)
 │   └── Entities/
 │       ├── ScriptRunRecord.cs  # Id, ScriptName, StartedAt, CompletedAt, Success, ResultMessage
-│       └── ScriptSettingEntity.cs  # Id, ScriptName, Key, Value (unique index on Name+Key)
+│       ├── ScriptSettingEntity.cs  # Id, ScriptName, Key, Value (unique index on Name+Key)
+│       └── AiTask.cs           # Id, Type, Description, Prompt, Model, Status, Output, ErrorMessage, timestamps
 ├── Hubs/
 │   └── LogHub.cs               # SignalR hub at /hubs/log (JoinScriptGroup, LeaveScriptGroup)
 └── Services/
-    ├── OllamaClient.cs         # IOllamaClient impl: POST /api/generate with error handling
-    ├── ScriptHubService.cs     # Bridges API to scripts: RunScriptAsync, SaveSettingsAsync, GetSuccessRatesAsync
-    ├── LogBroadcastService.cs  # Singleton: accepts LogEntry, broadcasts via SignalR + OnLogReceived event
-    ├── ScriptLogger.cs         # IScriptLogger impl: creates LogEntry, delegates to LogBroadcastService
-    └── TestConnectionService.cs # Diagnostics: test Ollama connectivity, check Gmail credential files
+    ├── OllamaClient.cs            # IOllamaClient impl: POST /api/generate with error handling
+    ├── ScriptHubService.cs        # Bridges API to scripts: RunScriptAsync, SaveSettingsAsync, GetSuccessRatesAsync
+    ├── LogBroadcastService.cs     # Singleton: accepts LogEntry, broadcasts via SignalR + OnLogReceived event
+    ├── ScriptLogger.cs            # IScriptLogger impl: creates LogEntry, delegates to LogBroadcastService
+    ├── TestConnectionService.cs   # Diagnostics: test Ollama connectivity, check Gmail credential files
+    └── AiTaskQueueService.cs      # BackgroundService: manages AI task queue, polls Ollama, persists results in SQLite
 ```
 
 **NuGet packages**: Microsoft.EntityFrameworkCore.Sqlite 9.x, Quartz.Extensions.Hosting
@@ -180,3 +193,6 @@ SmartScript.Core  (no dependencies)
 | Scheduling          | QuartzSchedulerService           | Cron-based via `ScriptMetadata.CronExpression`         |
 | Plugin hot-loading  | PluginLoader + FileSystemWatcher | AssemblyLoadContext per DLL, auto-reload on change     |
 | AI processing       | OllamaClient                     | HTTP POST to Ollama REST API (`/api/generate`)         |
+| Async AI tasks      | AiTaskQueueService + Channel<int> | Channel-based task dispatch, periodic Ollama polling, result storage in SQLite |
+| Task persistence    | AiTask entity + AppDbContext     | Tasks stored in SQLite, queried by UI for "Load from Queue" functionality |
+| Default AI model    | ConfigController + appsettings   | `Ollama:DefaultModel` configured in appsettings.json, exposed via `/api/config` |
