@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { M3u8DLTestResult } from "../../types";
 import { testM3u8DL } from "../../api/diagnostics";
 import {
@@ -6,7 +6,7 @@ import {
   SettingField,
   SaveBar,
 } from "./shared";
-import { runScript, stopScript } from "../../api/scripts";
+import { runScript, stopScript, saveSettings, getScript } from "../../api/scripts";
 
 // ── Queue entry model ──────────────────────────────────────────────────────────
 
@@ -45,32 +45,13 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
     useScriptPage(scriptName);
 
   const [running, setRunning] = useState(false);
-  const [runState, setRunState] = useState<string | null>(null);
-
-  const handleRun = async () => {
-    setRunning(true);
-    setRunState(null);
-    try {
-      const result = await runScript(scriptName);
-      setRunState(result.state);
-    } catch (err) {
-      setRunState("error");
-    }
-    setRunning(false);
-  };
-
-  const handleStop = async () => {
-    try {
-      const result = await stopScript(scriptName);
-      setRunState(result.state);
-    } catch {
-      /* ignore */
-    }
-  };
+  const [runError, setRunError] = useState<string | null>(null);
 
   // ── Queue list state ────────────────────────────────────────────────────────
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [initialized, setInitialized] = useState(false);
+  // Distinguishes user edits (should auto-save) from server-loaded updates (should not)
+  const userEdited = useRef(false);
 
   // Initialize once when settings first arrive
   useEffect(() => {
@@ -80,10 +61,38 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
     }
   }, [settings, initialized]);
 
+  // ── Auto-save queue on user edits (debounced, skipped while running) ────────
+  useEffect(() => {
+    if (!initialized || !userEdited.current || running) return;
+    const t = setTimeout(() => {
+      userEdited.current = false;
+      saveSettings(scriptName, { downloadQueue: serializeQueue(entries) }).catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+  }, [entries, initialized, running, scriptName]);
+
+  // ── Poll queue from DB while running ────────────────────────────────────────
+  // The script removes items from the DB as it processes them; polling keeps the
+  // UI in sync so the user sees the queue shrink in real time.
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(async () => {
+      try {
+        const s = await getScript(scriptName);
+        const q = s.settings.find((st) => st.key === "downloadQueue")?.savedValue ?? "";
+        userEdited.current = false; // server update — don't trigger auto-save
+        setEntries(parseQueueText(q));
+      } catch { /* ignore — log console shows status */ }
+    }, 1500);
+    return () => clearInterval(id);
+  }, [running, scriptName]);
+
+  // Update entries from user interaction
   const updateEntries = useCallback(
     (next: QueueEntry[]) => {
+      userEdited.current = true;
       setEntries(next);
-      set("downloadQueue")(serializeQueue(next));
+      set("downloadQueue")(serializeQueue(next)); // keep settings state in sync for Save Settings
     },
     [set],
   );
@@ -94,15 +103,14 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
     updateEntries(entries.filter((_, idx) => idx !== i));
 
   const updateRow = (i: number, field: "url" | "name", value: string) => {
-    const next = entries.map((e, idx) => (idx === i ? { ...e, [field]: value } : e));
-    updateEntries(next);
+    updateEntries(entries.map((e, idx) => (idx === i ? { ...e, [field]: value } : e)));
   };
 
   // Paste handler: split pasted text on newlines → add multiple entries at once
   const handlePaste = (e: React.ClipboardEvent, rowIndex: number, field: "url" | "name") => {
     const text = e.clipboardData.getData("text");
     const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l);
-    if (lines.length <= 1) return; // single line — let default paste handle it
+    if (lines.length <= 1) return;
     e.preventDefault();
 
     const newRows: QueueEntry[] = lines.map((l) => {
@@ -116,6 +124,48 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
     const next = [...entries];
     next.splice(rowIndex, 1, ...newRows);
     updateEntries(next);
+  };
+
+  // ── Add item while running ───────────────────────────────────────────────────
+  // Save to DB immediately so the running script picks it up on its next iteration.
+  const addRowWhileRunning = async () => {
+    // Flush pending entries to DB first, then reload from DB to get current state
+    const current = await getScript(scriptName);
+    const q = current.settings.find((s) => s.key === "downloadQueue")?.savedValue ?? "";
+    const liveEntries = parseQueueText(q);
+    const next = [...liveEntries, { url: "", name: "" }];
+    userEdited.current = false;
+    setEntries(next);
+    // Save immediately (no debounce) so the script can see the new slot
+    await saveSettings(scriptName, { downloadQueue: serializeQueue(next) }).catch(() => {});
+  };
+
+  // ── Run / Stop ──────────────────────────────────────────────────────────────
+  const handleRun = async () => {
+    // Flush any pending queue changes to DB before starting
+    userEdited.current = false;
+    await saveSettings(scriptName, { downloadQueue: serializeQueue(entries) }).catch(() => {});
+
+    setRunning(true);
+    setRunError(null);
+    try {
+      await runScript(scriptName);
+    } catch (err) {
+      setRunError(String(err));
+    } finally {
+      setRunning(false);
+      // Reload final queue state after run completes
+      try {
+        const s = await getScript(scriptName);
+        const q = s.settings.find((st) => st.key === "downloadQueue")?.savedValue ?? "";
+        userEdited.current = false;
+        setEntries(parseQueueText(q));
+      } catch { /* ignore */ }
+    }
+  };
+
+  const handleStop = async () => {
+    try { await stopScript(scriptName); } catch { /* ignore */ }
   };
 
   // ── Diagnostics ─────────────────────────────────────────────────────────────
@@ -153,23 +203,31 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
                 {entries.length > 0 && (
                   <span className="badge bg-secondary ms-2">{entries.length}</span>
                 )}
+                {running && (
+                  <span className="badge bg-warning text-dark ms-2">
+                    <span className="spinner-border spinner-border-sm me-1" style={{ width: 10, height: 10 }}></span>
+                    Running
+                  </span>
+                )}
               </h5>
               <div className="d-flex gap-2">
-                <button className="btn btn-outline-primary btn-sm" onClick={addRow}>
+                <button
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={running ? addRowWhileRunning : addRow}
+                >
                   <i className="bi bi-plus-lg me-1"></i>Add
                 </button>
-                {runState === "running" ? (
+                {running ? (
                   <button className="btn btn-warning btn-sm" onClick={handleStop}>
                     <i className="bi bi-stop-fill me-1"></i>Stop
                   </button>
                 ) : (
-                  <button className="btn btn-success btn-sm" onClick={handleRun} disabled={running}>
-                    {running ? (
-                      <span className="spinner-border spinner-border-sm me-1"></span>
-                    ) : (
-                      <i className="bi bi-play-fill me-1"></i>
-                    )}
-                    Run
+                  <button
+                    className="btn btn-success btn-sm"
+                    onClick={handleRun}
+                    disabled={entries.filter((e) => e.url.trim()).length === 0}
+                  >
+                    <i className="bi bi-play-fill me-1"></i>Run
                   </button>
                 )}
               </div>
@@ -178,7 +236,11 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
               {entries.length === 0 ? (
                 <div className="text-center py-4 text-muted">
                   <i className="bi bi-inbox fs-2 d-block mb-2"></i>
-                  <div className="small">No downloads queued. Click <strong>Add</strong> or paste URLs.</div>
+                  <div className="small">
+                    {running
+                      ? "All downloads completed — add more items to keep going."
+                      : "No downloads queued. Click Add or paste URLs."}
+                  </div>
                 </div>
               ) : (
                 <div>
@@ -202,6 +264,7 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
                           value={entry.url}
                           onChange={(e) => updateRow(i, "url", e.target.value)}
                           onPaste={(e) => handlePaste(e, i, "url")}
+                          readOnly={running}
                         />
                       </div>
                       <div className="col-4">
@@ -212,12 +275,14 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
                           value={entry.name}
                           onChange={(e) => updateRow(i, "name", e.target.value)}
                           onPaste={(e) => handlePaste(e, i, "name")}
+                          readOnly={running}
                         />
                       </div>
                       <div style={{ width: "36px" }}>
                         <button
                           className="btn btn-outline-danger btn-sm"
                           onClick={() => removeRow(i)}
+                          disabled={running}
                           title="Remove"
                         >
                           <i className="bi bi-x-lg"></i>
@@ -225,16 +290,18 @@ export function M3u8DownloaderPage({ scriptName }: { scriptName: string }) {
                       </div>
                     </div>
                   ))}
-                  <button className="btn btn-outline-secondary btn-sm mt-1" onClick={addRow}>
-                    <i className="bi bi-plus-lg me-1"></i>Add another
-                  </button>
+                  {!running && (
+                    <button className="btn btn-outline-secondary btn-sm mt-1" onClick={addRow}>
+                      <i className="bi bi-plus-lg me-1"></i>Add another
+                    </button>
+                  )}
                 </div>
               )}
             </div>
-            {runState && runState !== "running" && (
+            {runError && (
               <div className="card-footer">
-                <span className={`small ${runState === "error" ? "text-danger" : "text-muted"}`}>
-                  Last run: {runState}
+                <span className="small text-danger">
+                  <i className="bi bi-exclamation-triangle me-1"></i>{runError}
                 </span>
               </div>
             )}

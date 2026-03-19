@@ -12,11 +12,13 @@ namespace SmartScript.Scripts.M3u8Downloader;
 public class M3u8DownloaderScript : IScript
 {
     private readonly IScriptLogger _logger;
+    private readonly IScriptSettingsStore _settingsStore;
     private CancellationTokenSource? _cts;
 
-    public M3u8DownloaderScript(IScriptLogger logger, IConfiguration configuration)
+    public M3u8DownloaderScript(IScriptLogger logger, IConfiguration configuration, IScriptSettingsStore settingsStore)
     {
         _logger = logger;
+        _settingsStore = settingsStore;
 
         var defaultExecutablePath = configuration["M3u8Downloader:ExecutablePath"] ?? "N_m3u8DL-RE";
         var defaultSaveDir        = configuration["M3u8Downloader:SaveDir"]        ?? "";
@@ -27,7 +29,7 @@ public class M3u8DownloaderScript : IScript
         Metadata = new ScriptMetadata
         {
             Name = "M3U8 Video Downloader",
-            Description = "Downloads HLS/M3U8 video streams using N_m3u8DL-RE. Add one download per line in the queue (format: URL|Filename). Runs silently with output captured to the log.",
+            Description = "Downloads HLS/M3U8 video streams using N_m3u8DL-RE. Add one download per line in the queue (format: URL|Filename). New items added while running are picked up automatically.",
             Version = "1.0.0",
             Author = "SmartScript Hub",
             Icon = "bi-cloud-arrow-down",
@@ -88,25 +90,13 @@ public class M3u8DownloaderScript : IScript
         _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var token = _cts.Token;
 
-        var queueRaw = GetSetting(settings, "downloadQueue", "");
-        var saveDir = GetSetting(settings, "saveDir", "");
+        // Read config settings once — these don't change while running
+        var saveDir        = GetSetting(settings, "saveDir", "");
         var executablePath = GetSetting(settings, "executablePath", "N_m3u8DL-RE");
-        var threadCount = GetSetting(settings, "threadCount", "6");
-        var outputFormat = GetSetting(settings, "outputFormat", "mp4");
-        var extraArgs = GetSetting(settings, "extraArgs", "");
+        var threadCount    = GetSetting(settings, "threadCount", "6");
+        var outputFormat   = GetSetting(settings, "outputFormat", "mp4");
+        var extraArgs      = GetSetting(settings, "extraArgs", "");
 
-        // Parse queue entries — keep raw lines in parallel for removal tracking
-        var (entries, rawLines) = ParseQueue(queueRaw);
-        if (entries.Count == 0)
-        {
-            return new ScriptResult
-            {
-                Success = false,
-                Message = "Download queue is empty. Add entries in the format: URL|Filename (one per line)."
-            };
-        }
-
-        // Resolve executable once
         var resolvedExe = ResolveExecutable(executablePath);
         if (resolvedExe is null)
         {
@@ -115,18 +105,27 @@ public class M3u8DownloaderScript : IScript
             return new ScriptResult { Success = false, Message = msg };
         }
 
-        await _logger.LogAsync(Metadata.Name, $"Starting queue: {entries.Count} item(s) to download.");
+        await _logger.LogAsync(Metadata.Name, "Queue started. New items added while running will be picked up automatically.");
 
         int completed = 0, failed = 0;
-        // Track which raw lines have been successfully downloaded (by index)
-        var completedIndices = new HashSet<int>();
 
-        for (int i = 0; i < entries.Count; i++)
+        while (!token.IsCancellationRequested)
         {
-            token.ThrowIfCancellationRequested();
+            // Re-read the live queue from the DB each iteration
+            var queueRaw = await _settingsStore.GetSettingAsync(Metadata.Name, "downloadQueue", "", token);
+            var (entries, rawLines) = ParseQueue(queueRaw);
 
-            var (url, saveName) = entries[i];
-            await _logger.LogAsync(Metadata.Name, $"[{i + 1}/{entries.Count}] Downloading: {saveName}");
+            if (entries.Count == 0)
+                break; // Queue is empty — done
+
+            // Take the first item and immediately remove it from the queue so it
+            // won't be re-processed if the script is restarted or another instance runs.
+            var (url, saveName) = entries[0];
+            var firstRaw = rawLines[0];
+            var remaining = string.Join("\n", rawLines.Skip(1));
+            await _settingsStore.SetSettingAsync(Metadata.Name, "downloadQueue", remaining, token);
+
+            await _logger.LogAsync(Metadata.Name, $"[{completed + failed + 1}] Downloading: {saveName}");
 
             try
             {
@@ -134,49 +133,38 @@ public class M3u8DownloaderScript : IScript
                 if (success)
                 {
                     completed++;
-                    completedIndices.Add(i);
-                    await _logger.LogAsync(Metadata.Name, $"[{i + 1}/{entries.Count}] Completed: {saveName}.{outputFormat}");
+                    await _logger.LogAsync(Metadata.Name, $"[{completed + failed}] Completed: {saveName}.{outputFormat}");
                 }
                 else
                 {
                     failed++;
-                    await _logger.LogAsync(Metadata.Name, $"[{i + 1}/{entries.Count}] Failed: {saveName}", LogLevel.Error);
+                    await _logger.LogAsync(Metadata.Name, $"[{completed + failed}] Failed: {saveName}", LogLevel.Error);
                 }
             }
             catch (OperationCanceledException)
             {
-                failed++;
-                var cancelMsg = $"Queue cancelled after {completed} completed, {failed} failed (item {i + 1}/{entries.Count}).";
+                // Re-insert the in-progress item at the front so it can be retried next run
+                var currentQueue = await _settingsStore.GetSettingAsync(Metadata.Name, "downloadQueue", "");
+                var requeued = string.IsNullOrWhiteSpace(currentQueue) ? firstRaw : firstRaw + "\n" + currentQueue;
+                await _settingsStore.SetSettingAsync(Metadata.Name, "downloadQueue", requeued);
+
+                var cancelMsg = $"Cancelled. {completed} completed, {failed} failed. In-progress item re-queued.";
                 await _logger.LogAsync(Metadata.Name, cancelMsg, LogLevel.Warning);
-                var remainingOnCancel = BuildRemainingQueue(rawLines, completedIndices);
-                return new ScriptResult
-                {
-                    Success = false,
-                    Message = cancelMsg,
-                    Details = new Dictionary<string, object> { ["completed"] = completed, ["failed"] = failed },
-                    UpdatedSettings = new Dictionary<string, string> { ["downloadQueue"] = remainingOnCancel }
-                };
+                return new ScriptResult { Success = false, Message = cancelMsg, Details = new Dictionary<string, object> { ["completed"] = completed, ["failed"] = failed } };
             }
         }
 
-        var resultMsg = completed == entries.Count
+        var resultMsg = failed == 0
             ? $"All {completed} download(s) completed successfully."
             : $"Queue finished: {completed} completed, {failed} failed.";
 
         await _logger.LogAsync(Metadata.Name, resultMsg, failed > 0 ? LogLevel.Warning : LogLevel.Info);
 
-        var remainingQueue = BuildRemainingQueue(rawLines, completedIndices);
         return new ScriptResult
         {
             Success = failed == 0,
             Message = resultMsg,
-            Details = new Dictionary<string, object>
-            {
-                ["total"] = entries.Count,
-                ["completed"] = completed,
-                ["failed"] = failed
-            },
-            UpdatedSettings = new Dictionary<string, string> { ["downloadQueue"] = remainingQueue }
+            Details = new Dictionary<string, object> { ["completed"] = completed, ["failed"] = failed }
         };
     }
 
@@ -197,8 +185,8 @@ public class M3u8DownloaderScript : IScript
         {
             FileName = exe,
             Arguments = args,
-            UseShellExecute = false,       // no popup window
-            RedirectStandardOutput = true, // capture output silently
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true,
             StandardOutputEncoding = Encoding.UTF8,
@@ -237,13 +225,9 @@ public class M3u8DownloaderScript : IScript
     private static readonly Regex SeparatorRegex =
         new(@"\s*[|\t]\s*|\s{2,}|\s+-\s+", RegexOptions.Compiled);
 
-    /// <summary>
-    /// Returns parsed (url, name) entries AND the corresponding raw lines (aligned by index)
-    /// so callers can reconstruct the queue after removing completed items.
-    /// </summary>
     private static (List<(string Url, string Name)> Entries, List<string> RawLines) ParseQueue(string raw)
     {
-        var entries = new List<(string, string)>();
+        var entries  = new List<(string, string)>();
         var rawLines = new List<string>();
         if (string.IsNullOrWhiteSpace(raw)) return (entries, rawLines);
 
@@ -253,11 +237,10 @@ public class M3u8DownloaderScript : IScript
             var trimmed = line.Trim().TrimEnd('\r');
             if (string.IsNullOrWhiteSpace(trimmed)) continue;
 
-            // Try to split on any supported separator
             var parts = SeparatorRegex.Split(trimmed, 2);
             if (parts.Length == 2)
             {
-                var url = parts[0].Trim();
+                var url  = parts[0].Trim();
                 var name = parts[1].Trim();
                 if (!string.IsNullOrWhiteSpace(url) && !string.IsNullOrWhiteSpace(name))
                 {
@@ -267,7 +250,6 @@ public class M3u8DownloaderScript : IScript
             }
             else
             {
-                // No name — derive from URL or use auto-index
                 var name = DeriveNameFromUrl(trimmed) ?? $"video_{autoIndex}";
                 entries.Add((trimmed, name));
                 rawLines.Add(trimmed);
@@ -278,30 +260,17 @@ public class M3u8DownloaderScript : IScript
         return (entries, rawLines);
     }
 
-    private static string BuildRemainingQueue(List<string> rawLines, HashSet<int> completedIndices)
-    {
-        var remaining = rawLines
-            .Select((line, i) => (line, i))
-            .Where(t => !completedIndices.Contains(t.i))
-            .Select(t => t.line);
-        return string.Join("\n", remaining);
-    }
-
     private static string? DeriveNameFromUrl(string url)
     {
         try
         {
-            var uri = new Uri(url);
+            var uri     = new Uri(url);
             var segment = uri.Segments.LastOrDefault(s => s != "/")?.TrimEnd('/');
             if (string.IsNullOrWhiteSpace(segment)) return null;
-            // Strip extension if present
             var dot = segment.LastIndexOf('.');
             return dot > 0 ? segment[..dot] : segment;
         }
-        catch
-        {
-            return null;
-        }
+        catch { return null; }
     }
 
     private static string BuildArguments(
@@ -336,7 +305,7 @@ public class M3u8DownloaderScript : IScript
         {
             try
             {
-                var candidate = Path.Combine(dir, executablePath);
+                var candidate    = Path.Combine(dir, executablePath);
                 if (File.Exists(candidate)) return candidate;
                 var candidateExe = candidate + ".exe";
                 if (File.Exists(candidateExe)) return candidateExe;

@@ -51,6 +51,7 @@ builder.Services.AddScoped<SpendingAnalysisService>();
 // Core services
 builder.Services.AddSingleton<LogBroadcastService>();
 builder.Services.AddSingleton<IScriptLogger, ScriptLogger>();
+builder.Services.AddSingleton<IScriptSettingsStore, ScriptSettingsStore>();
 builder.Services.AddScoped<ScriptHubService>();
 builder.Services.AddScoped<TestConnectionService>();
 builder.Services.AddSingleton<ScriptManager>();
