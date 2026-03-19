@@ -4,13 +4,13 @@
     {
       "name": "ASP.NET Core Backend",
       "runtimeExecutable": "dotnet",
-      "runtimeArgs": ["run", "--project", "src/SmartScript.WebUI"],
+      "runtimeArgs": ["run", "--project", "src/SmartScript.Api"],
       "port": 5220
     },
     {
       "name": "Vite Frontend (dev)",
       "runtimeExecutable": "C:\\nvm4w\\nodejs\\node.exe",
-      "runtimeArgs": ["C:\\nvm4w\\nodejs\\node_modules\\npm\\bin\\npm-cli.js", "--prefix", "src/SmartScript.WebUI/ClientApp", "run", "dev"],
+      "runtimeArgs": ["C:\\nvm4w\\nodejs\\node_modules\\npm\\bin\\npm-cli.js", "--prefix", "client", "run", "dev"],
       "port": 3000
     }
   ]

@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <SpaRoot>$(MSBuildProjectDirectory)\..\..\client\</SpaRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SmartScript.Core\SmartScript.Core.csproj" />
+    <ProjectReference Include="..\SmartScript.Executor\SmartScript.Executor.csproj" />
+    <ProjectReference Include="..\SmartScript.Scripts.EmailCleaner\SmartScript.Scripts.EmailCleaner.csproj" />
+    <ProjectReference Include="..\SmartScript.Scripts.M3u8Downloader\SmartScript.Scripts.M3u8Downloader.csproj" />
+    <ProjectReference Include="..\SmartScript.Scripts.PdfParser\SmartScript.Scripts.PdfParser.csproj" />
+    <ProjectReference Include="..\SmartScript.Scripts.SpendingAnalysis\SmartScript.Scripts.SpendingAnalysis.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.*">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.*" />
+    <PackageReference Include="Quartz.Extensions.Hosting" Version="3.*" />
+  </ItemGroup>
+
+  <!-- Exclude ClientApp from dotnet build -->
+  <ItemGroup>
+    <Content Remove="$(SpaRoot)**" />
+    <None Remove="$(SpaRoot)**" />
+    <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**" />
+  </ItemGroup>
+
+  <!-- Build React app into wwwroot on publish (outDir is ../wwwroot in vite.config.ts) -->
+  <Target Name="PublishSpa" AfterTargets="ComputeFilesToPublish">
+    <Exec WorkingDirectory="$(SpaRoot)" Command="npm ci" />
+    <Exec WorkingDirectory="$(SpaRoot)" Command="npm run build" />
+    <ItemGroup>
+      <DistFiles Include="wwwroot\**" />
+      <ResolvedFileToPublish Include="@(DistFiles->'%(FullPath)')" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>wwwroot\%(RecursiveDir)%(FileName)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+</Project>

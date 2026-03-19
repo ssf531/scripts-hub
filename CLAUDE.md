@@ -17,7 +17,7 @@ SmartScriptHub.slnx
 src/
   SmartScript.Core/                 # Shared interfaces & models (no dependencies)
   SmartScript.Executor/             # Background services, Quartz scheduling, plugin loader
-  SmartScript.WebUI/                # ASP.NET Core API + React SPA (host/entry point)
+  SmartScript.Api/                # ASP.NET Core API + React SPA (host/entry point)
   SmartScript.Scripts.EmailCleaner/ # Built-in Gmail AI sorter plugin
 ```
 
@@ -28,7 +28,7 @@ src/
 - Script settings are defined via `ScriptMetadata.Settings` (`SettingDefinition[]`) and automatically rendered as a dynamic form in the React UI — no manual frontend changes needed for new settings.
 - All log output goes through `IScriptLogger` (never `Console.WriteLine` directly in scripts).
 - SQLite database is auto-created on startup; use EF Core migrations for schema changes.
-- Frontend lives in `src/SmartScript.WebUI/ClientApp/` (Vite + React + TypeScript). API calls proxy to the ASP.NET backend via Vite config.
+- Frontend lives in `src/SmartScript.Api/ClientApp/` (Vite + React + TypeScript). API calls proxy to the ASP.NET backend via Vite config.
 
 ## Development
 

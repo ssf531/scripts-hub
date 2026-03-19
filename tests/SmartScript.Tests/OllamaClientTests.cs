@@ -1,6 +1,6 @@
 using System.Net;
 using System.Text;
-using SmartScript.WebUI.Services;
+using SmartScript.Api.Services;
 using Xunit;
 
 namespace SmartScript.Tests;

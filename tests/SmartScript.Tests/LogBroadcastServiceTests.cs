@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.SignalR;
 using NSubstitute;
 using SmartScript.Core.Models;
-using SmartScript.WebUI.Hubs;
-using SmartScript.WebUI.Services;
+using SmartScript.Api.Hubs;
+using SmartScript.Api.Services;
 using Xunit;
 
 namespace SmartScript.Tests;

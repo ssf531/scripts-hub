@@ -4,7 +4,9 @@
     <Project Path="src/SmartScript.Executor/SmartScript.Executor.csproj" />
     <Project Path="src/SmartScript.Scripts.EmailCleaner/SmartScript.Scripts.EmailCleaner.csproj" />
     <Project Path="src/SmartScript.Scripts.M3u8Downloader/SmartScript.Scripts.M3u8Downloader.csproj" />
-    <Project Path="src/SmartScript.WebUI/SmartScript.WebUI.csproj" />
+    <Project Path="src/SmartScript.Scripts.PdfParser/SmartScript.Scripts.PdfParser.csproj" />
+    <Project Path="src/SmartScript.Scripts.SpendingAnalysis/SmartScript.Scripts.SpendingAnalysis.csproj" />
+    <Project Path="src/SmartScript.Api/SmartScript.Api.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SmartScript.Tests/SmartScript.Tests.csproj" />

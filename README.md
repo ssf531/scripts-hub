@@ -16,13 +16,19 @@ The project is divided into several decoupled components to ensure maximum exten
 
 - **SmartScript.Core**: The foundation library defining script contracts (`IScript`), configuration metadata (`ScriptMetadata`), and file handling standards.
 
-- **SmartScript.WebUI (React + ASP.NET Core API)**: A browser-based interface for managing script states, real-time monitoring, and dynamic configuration. The backend exposes REST API endpoints and a SignalR hub; the frontend is a React SPA with client-side routing.
+- **SmartScript.Api (ASP.NET Core API)**: The host application. Exposes REST API endpoints and a SignalR hub. Serves the React SPA from `wwwroot/` in production; proxied from the Vite dev server during development.
+
+- **client/ (React + TypeScript SPA)**: A browser-based interface for managing script states, real-time monitoring, and dynamic configuration. Built with Vite; lives at the repo root, separate from the C# projects.
 
 - **SmartScript.Executor**: A background service that manages script lifecycles and triggers tasks based on schedules or specific events.
 
 - **SmartScript.Scripts.EmailCleaner**: Built-in plugin implementing Gmail integration and AI-driven mail sorting.
 
 - **SmartScript.Scripts.M3u8Downloader**: Built-in plugin for queued HLS/M3U8 video downloads using [N_m3u8DL-RE](https://github.com/nilaoda/N_m3u8DL-RE).
+
+- **SmartScript.Scripts.PdfParser**: Service library for PDF bank statement parsing — column layout detection, transaction extraction, and CSV export.
+
+- **SmartScript.Scripts.SpendingAnalysis**: Service library for CSV transaction grouping, description normalisation, and Excel export.
 
   ***
 

@@ -3,8 +3,9 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using SmartScript.Core.Services;
-using SmartScript.WebUI.Controllers;
-using SmartScript.WebUI.Services;
+using SmartScript.Scripts.PdfParser;
+using SmartScript.Api.Controllers;
+using SmartScript.Api.Services;
 using Xunit;
 
 namespace SmartScript.Tests;

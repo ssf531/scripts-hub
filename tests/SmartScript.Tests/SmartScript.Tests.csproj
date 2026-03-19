@@ -22,7 +22,9 @@
     <ProjectReference Include="..\..\src\SmartScript.Core\SmartScript.Core.csproj" />
     <ProjectReference Include="..\..\src\SmartScript.Executor\SmartScript.Executor.csproj" />
     <ProjectReference Include="..\..\src\SmartScript.Scripts.EmailCleaner\SmartScript.Scripts.EmailCleaner.csproj" />
-    <ProjectReference Include="..\..\src\SmartScript.WebUI\SmartScript.WebUI.csproj" />
+    <ProjectReference Include="..\..\src\SmartScript.Scripts.PdfParser\SmartScript.Scripts.PdfParser.csproj" />
+    <ProjectReference Include="..\..\src\SmartScript.Scripts.SpendingAnalysis\SmartScript.Scripts.SpendingAnalysis.csproj" />
+    <ProjectReference Include="..\..\src\SmartScript.Api\SmartScript.Api.csproj" />
   </ItemGroup>
 
 </Project>

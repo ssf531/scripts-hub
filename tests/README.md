@@ -4,7 +4,7 @@ End-to-end tests using [Playwright](https://playwright.dev) for the SmartScript 
 
 ## Setup
 
-Install dependencies (from `src/SmartScript.WebUI/ClientApp`):
+Install dependencies (from `src/SmartScript.Api/ClientApp`):
 
 ```bash
 npm install

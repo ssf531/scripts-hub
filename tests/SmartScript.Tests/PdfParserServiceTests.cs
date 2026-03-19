@@ -1,4 +1,4 @@
-using SmartScript.WebUI.Services;
+using SmartScript.Scripts.PdfParser;
 using Xunit;
 
 namespace SmartScript.Tests;
