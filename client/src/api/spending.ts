@@ -69,11 +69,13 @@ export async function exportExcel(
 export async function categorise(
   groups: TransactionGroup[],
   model: string,
+  categories?: string[],
+  merchantNotes?: string[],
 ): Promise<CategoriseResult> {
   const res = await fetch("/api/spending-analysis/categorise", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ groups, model }),
+    body: JSON.stringify({ groups, model, categories, merchantNotes }),
   });
   if (!res.ok) throw new Error(`categorise failed: ${await res.text()}`);
   return res.json();
@@ -82,11 +84,13 @@ export async function categorise(
 export async function categoriseQueue(
   groups: TransactionGroup[],
   model: string,
+  categories?: string[],
+  merchantNotes?: string[],
 ): Promise<{ taskId: number }> {
   const res = await fetch("/api/spending-analysis/categorise-queue", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ groups, model }),
+    body: JSON.stringify({ groups, model, categories, merchantNotes }),
   });
   if (!res.ok) throw new Error(`categoriseQueue failed: ${await res.text()}`);
   return res.json();

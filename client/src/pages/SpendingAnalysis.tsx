@@ -53,6 +53,17 @@ function StepBar({ current }: { current: number }) {
 
 // ── Category colours ──────────────────────────────────────────────────────────
 
+const DEFAULT_CATEGORIES = [
+  "Food & Dining",
+  "Transport",
+  "Shopping",
+  "Bills & Utilities",
+  "Healthcare",
+  "Entertainment",
+  "Savings & Transfers",
+  "Other",
+];
+
 const CATEGORY_COLORS: Record<string, string> = {
   "Food & Dining":        "#fd7e14",
   Transport:              "#0d6efd",
@@ -64,8 +75,13 @@ const CATEGORY_COLORS: Record<string, string> = {
   Other:                  "#6c757d",
 };
 
-function catColor(cat: string) {
-  return CATEGORY_COLORS[cat] ?? "#6c757d";
+// Colour pool for any custom categories not in the map above
+const COLOR_POOL = ["#198754", "#ffc107", "#17a2b8", "#6610f2", "#e64980", "#0ca678", "#f76707", "#3bc9db"];
+
+function catColor(cat: string, allCats?: string[]) {
+  if (CATEGORY_COLORS[cat]) return CATEGORY_COLORS[cat];
+  const idx = allCats ? allCats.indexOf(cat) : -1;
+  return COLOR_POOL[Math.max(idx, 0) % COLOR_POOL.length];
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
@@ -89,6 +105,9 @@ export function SpendingAnalysis() {
   // Step 4 state
   const [ollamaModel, setOllamaModel] = useState("llama3.2");
   const [periodLabel, setPeriodLabel] = useState("");
+  const [customCategories, setCustomCategories] = useState<string[]>([...DEFAULT_CATEGORIES]);
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [merchantNotesText, setMerchantNotesText] = useState("");
   const [categorising, setCategorising] = useState(false);
   const [categories, setCategories] = useState<CategoryAssignment[]>([]);
   const [rawResponse, setRawResponse] = useState("");
@@ -191,13 +210,19 @@ export function SpendingAnalysis() {
 
   // ── Step 4: categorise ────────────────────────────────────────────────────
 
+  const parsedMerchantNotes = merchantNotesText
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
   const runCategorise = useCallback(async () => {
     setCategorising(true);
     setCatError(null);
     setCategories([]);
     setRawResponse("");
     try {
-      const result = await categorise(groups, ollamaModel);
+      const notes = merchantNotesText.split("\n").map((l) => l.trim()).filter(Boolean);
+      const result = await categorise(groups, ollamaModel, customCategories, notes);
       setCategories(result.categories);
       setRawResponse(result.rawResponse);
     } catch (e: unknown) {
@@ -205,14 +230,15 @@ export function SpendingAnalysis() {
     } finally {
       setCategorising(false);
     }
-  }, [groups, ollamaModel]);
+  }, [groups, ollamaModel, customCategories, merchantNotesText]);
 
   const addCategoriseToQueue = useCallback(async () => {
     setCatError(null);
     setCategories([]);
     setRawResponse("");
     try {
-      const result = await categoriseQueue(groups, ollamaModel);
+      const notes = merchantNotesText.split("\n").map((l) => l.trim()).filter(Boolean);
+      const result = await categoriseQueue(groups, ollamaModel, customCategories, notes);
       setQueueTaskId(result.taskId);
       setQueueTask({ id: result.taskId, status: "Pending" } as AiTask);
 
@@ -244,7 +270,7 @@ export function SpendingAnalysis() {
     } catch (e: unknown) {
       setCatError(e instanceof Error ? e.message : String(e));
     }
-  }, [groups, ollamaModel, pollIntervalRef]);
+  }, [groups, ollamaModel, customCategories, merchantNotesText, pollIntervalRef]);
 
   useEffect(() => {
     return () => {
@@ -324,6 +350,8 @@ export function SpendingAnalysis() {
     setQueueTask(null);
     setCompletedTasks([]);
     setShowCompletedTasks(false);
+    setCustomCategories([...DEFAULT_CATEGORIES]);
+    setMerchantNotesText("");
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
   };
 
@@ -649,8 +677,8 @@ export function SpendingAnalysis() {
             <div>
               <h5 className="mb-3"><i className="bi bi-robot me-2"></i>AI Spending Category Analysis</h5>
               <p className="text-muted">
-                Ollama will categorise your spending groups into: Food & Dining, Transport, Shopping,
-                Bills & Utilities, Healthcare, Entertainment, Savings & Transfers, Other.
+                Ollama will categorise your spending groups using the categories below.
+                Add merchant notes to correct common misclassifications.
               </p>
 
               <div className="row g-3 mb-3">
@@ -673,6 +701,93 @@ export function SpendingAnalysis() {
                     onChange={(e) => setPeriodLabel(e.target.value)}
                   />
                 </div>
+              </div>
+
+              {/* ── Category set editor ──────────────────────────────── */}
+              <div className="mb-3">
+                <label className="form-label fw-semibold">
+                  <i className="bi bi-tags me-1"></i>Categories
+                </label>
+                <div
+                  className="d-flex flex-wrap gap-2 p-2 border rounded mb-1"
+                  style={{ background: "#f8f9fa", minHeight: 44 }}
+                >
+                  {customCategories.map((cat, i) => (
+                    <span
+                      key={i}
+                      className="badge d-inline-flex align-items-center gap-1 py-2 px-2"
+                      style={{ background: catColor(cat, customCategories), fontSize: 13 }}
+                    >
+                      {cat}
+                      <button
+                        type="button"
+                        className="btn-close btn-close-white"
+                        style={{ fontSize: 9 }}
+                        aria-label="Remove"
+                        onClick={() => setCustomCategories((prev) => prev.filter((_, j) => j !== i))}
+                      />
+                    </span>
+                  ))}
+                  <div className="d-flex gap-1">
+                    <input
+                      type="text"
+                      className="form-control form-control-sm"
+                      style={{ width: 170 }}
+                      placeholder="Add category…"
+                      value={newCategoryInput}
+                      onChange={(e) => setNewCategoryInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newCategoryInput.trim()) {
+                          setCustomCategories((prev) => [...prev, newCategoryInput.trim()]);
+                          setNewCategoryInput("");
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-secondary"
+                      disabled={!newCategoryInput.trim()}
+                      onClick={() => {
+                        setCustomCategories((prev) => [...prev, newCategoryInput.trim()]);
+                        setNewCategoryInput("");
+                      }}
+                    >
+                      <i className="bi bi-plus-lg"></i>
+                    </button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-link btn-sm p-0 text-muted"
+                  onClick={() => setCustomCategories([...DEFAULT_CATEGORIES])}
+                >
+                  Reset to defaults
+                </button>
+              </div>
+
+              {/* ── Merchant notes ───────────────────────────────────── */}
+              <div className="mb-3">
+                <label className="form-label fw-semibold">
+                  <i className="bi bi-patch-check me-1"></i>Merchant Notes
+                  <span className="text-muted fw-normal ms-2 small">(optional — one note per line)</span>
+                </label>
+                <textarea
+                  className="form-control font-monospace"
+                  rows={4}
+                  placeholder={
+                    "PB Tech is an online electronics store, not a fuel station\n" +
+                    "The Warehouse is a general merchandise retailer\n" +
+                    "Pak'nSave is a supermarket"
+                  }
+                  value={merchantNotesText}
+                  onChange={(e) => setMerchantNotesText(e.target.value)}
+                  style={{ fontSize: 13 }}
+                />
+                {parsedMerchantNotes.length > 0 && (
+                  <div className="form-text text-muted">
+                    {parsedMerchantNotes.length} note{parsedMerchantNotes.length !== 1 ? "s" : ""} will be sent to the AI.
+                  </div>
+                )}
               </div>
 
               <div className="d-flex gap-2 mb-4">
@@ -776,7 +891,7 @@ export function SpendingAnalysis() {
                             <td>
                               <span
                                 className="badge me-2"
-                                style={{ background: catColor(row.category) }}
+                                style={{ background: catColor(row.category, customCategories) }}
                               >
                                 {row.category}
                               </span>
@@ -792,7 +907,7 @@ export function SpendingAnalysis() {
                                       className="progress-bar"
                                       style={{
                                         width: `${row.pct}%`,
-                                        background: catColor(row.category),
+                                        background: catColor(row.category, customCategories),
                                       }}
                                     />
                                   </div>

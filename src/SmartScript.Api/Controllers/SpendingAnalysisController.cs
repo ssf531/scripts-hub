@@ -61,46 +61,17 @@ public class SpendingAnalysisController(SpendingAnalysisService analysisService,
         if (request.Groups == null || request.Groups.Count == 0)
             return BadRequest("No groups to categorise.");
 
-        var groupsJson = JsonSerializer.Serialize(
-            request.Groups.Select(g => new { group = g.DisplayName, totalDebit = g.TotalDebit, count = g.Count }),
-            new JsonSerializerOptions { WriteIndented = true });
-
-        var prompt = $$"""
-            You are a personal finance analyst. Below is a list of spending groups from a bank statement.
-            For each group, assign ONE category from: Food & Dining, Transport, Shopping, Bills & Utilities, Healthcare, Entertainment, Savings & Transfers, Other.
-            Return ONLY a JSON array with no extra text: [{"group":"<name>","category":"<cat>","confidence":"high|medium|low"}]
-
-            GROUPS:
-            {{groupsJson}}
-            """;
-
         string raw;
         try
         {
-            raw = await ollamaClient.GenerateAsync(prompt, request.Model ?? "llama3.2", ct);
+            raw = await ollamaClient.GenerateAsync(BuildPrompt(request), request.Model ?? "llama3.2", ct);
         }
         catch (Exception ex)
         {
             return StatusCode(500, new { error = ex.Message });
         }
 
-        // Try to extract JSON from the response (Ollama may include preamble text)
-        var jsonStart = raw.IndexOf('[');
-        var jsonEnd   = raw.LastIndexOf(']');
-        if (jsonStart < 0 || jsonEnd < 0)
-            return Ok(new { categories = Array.Empty<object>(), rawResponse = raw });
-
-        var jsonSlice = raw[jsonStart..(jsonEnd + 1)];
-        try
-        {
-            var categories = JsonSerializer.Deserialize<List<CategoryAssignment>>(jsonSlice,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            return Ok(new { categories, rawResponse = raw });
-        }
-        catch
-        {
-            return Ok(new { categories = Array.Empty<object>(), rawResponse = raw });
-        }
+        return Ok(ParseCategoriesResponse(raw));
     }
 
     // POST /api/spending-analysis/categorise-queue
@@ -111,27 +82,62 @@ public class SpendingAnalysisController(SpendingAnalysisService analysisService,
         if (request.Groups == null || request.Groups.Count == 0)
             return BadRequest("No groups to categorise.");
 
-        var groupsJson = System.Text.Json.JsonSerializer.Serialize(
-            request.Groups.Select(g => new { group = g.DisplayName, totalDebit = g.TotalDebit, count = g.Count }),
-            new JsonSerializerOptions { WriteIndented = true });
-
-        var prompt = $$"""
-            You are a personal finance analyst. Below is a list of spending groups from a bank statement.
-            For each group, assign ONE category from: Food & Dining, Transport, Shopping, Bills & Utilities, Healthcare, Entertainment, Savings & Transfers, Other.
-            Return ONLY a JSON array with no extra text: [{"group":"<name>","category":"<cat>","confidence":"high|medium|low"}]
-
-            GROUPS:
-            {{groupsJson}}
-            """;
-
         var taskId = await aiTaskQueue.EnqueueAsync(
             type:        "SpendingCategorisation",
             description: $"Categorise {request.Groups.Count} spending group(s)",
-            prompt:      prompt,
+            prompt:      BuildPrompt(request),
             model:       request.Model ?? "llama3.2",
             ct:          ct);
 
         return Accepted(new { taskId });
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private static readonly string[] DefaultCategories =
+        ["Food & Dining", "Transport", "Shopping", "Bills & Utilities", "Healthcare", "Entertainment", "Savings & Transfers", "Other"];
+
+    private static string BuildPrompt(CategoriseRequest request)
+    {
+        var cats     = request.Categories is { Count: > 0 } ? request.Categories : [..DefaultCategories];
+        var catList  = string.Join(", ", cats);
+        var groupsJson = JsonSerializer.Serialize(
+            request.Groups.Select(g => new { group = g.DisplayName, totalDebit = g.TotalDebit, count = g.Count }),
+            new JsonSerializerOptions { WriteIndented = true });
+
+        var notesSection = request.MerchantNotes is { Count: > 0 }
+            ? $"\nMERCHANT NOTES (use these to improve categorisation accuracy):\n" +
+              string.Join("\n", request.MerchantNotes.Select(n => $"- {n}")) + "\n"
+            : "";
+
+        return $"""
+            You are a personal finance analyst. Below is a list of spending groups from a bank statement.
+            For each group, assign ONE category from: {catList}.
+            Return ONLY a JSON array with no extra text: [{{"group":"<name>","category":"<cat>","confidence":"high|medium|low"}}]
+            {notesSection}
+            GROUPS:
+            {groupsJson}
+            """;
+    }
+
+    private static object ParseCategoriesResponse(string raw)
+    {
+        var jsonStart = raw.IndexOf('[');
+        var jsonEnd   = raw.LastIndexOf(']');
+        if (jsonStart < 0 || jsonEnd < 0)
+            return new { categories = Array.Empty<object>(), rawResponse = raw };
+
+        try
+        {
+            var categories = JsonSerializer.Deserialize<List<CategoryAssignment>>(
+                raw[jsonStart..(jsonEnd + 1)],
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return new { categories, rawResponse = raw };
+        }
+        catch
+        {
+            return new { categories = Array.Empty<object>(), rawResponse = raw };
+        }
     }
 }
 
@@ -147,4 +153,8 @@ public class CategoriseRequest
 {
     public List<TransactionGroup> Groups { get; set; } = [];
     public string? Model { get; set; }
+    /// <summary>Custom category names. Falls back to the default 8 if empty.</summary>
+    public List<string>? Categories { get; set; }
+    /// <summary>Free-text merchant hints injected into the AI prompt, e.g. "PB Tech is an online electronics store".</summary>
+    public List<string>? MerchantNotes { get; set; }
 }
