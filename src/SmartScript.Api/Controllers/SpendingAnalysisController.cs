@@ -110,13 +110,13 @@ public class SpendingAnalysisController(SpendingAnalysisService analysisService,
               string.Join("\n", request.MerchantNotes.Select(n => $"- {n}")) + "\n"
             : "";
 
-        return $"""
+        return $$"""
             You are a personal finance analyst. Below is a list of spending groups from a bank statement.
-            For each group, assign ONE category from: {catList}.
-            Return ONLY a JSON array with no extra text: [{{"group":"<name>","category":"<cat>","confidence":"high|medium|low"}}]
-            {notesSection}
+            For each group, assign ONE category from: {{catList}}.
+            Return ONLY a JSON array with no extra text: [{"group":"<name>","category":"<cat>","confidence":"high|medium|low"}]
+            {{notesSection}}
             GROUPS:
-            {groupsJson}
+            {{groupsJson}}
             """;
     }
 
